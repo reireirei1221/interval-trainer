@@ -218,18 +218,19 @@ export default function IntervalTrainer() {
     // 次へボタンが押されたとき、クイズの進行やレビューの進行を制御する関数
     function handleNext() {
         if (stage === STAGE.QUIZ) {
-            // wasWrongは、isCorrectの反転
-            const wasWrong = isCorrect === false;
+            // // wasWrongは、isCorrectの反転
+            // const wasWrong = isCorrect === false;
             // もし間違っていたら、wrongIndicesに現在のindexを追加
-            if (wasWrong) setWrongIndices((w) => [...w, index]);
+            if (hadWrong) setWrongIndices((w) => [...w, index]);
 
             if (index + 1 < questions.length) {
                 setIndex((i) => i + 1);
                 setSelectedAnswer(null);
                 setIsCorrect(null);
+                setHadWrong(null);
             } else {
                 // 終了 → 復習判定
-                if (wrongIndices.concat(wasWrong ? [index] : []).length > 0) {
+                if (wrongIndices.concat(hadWrong ? [index] : []).length > 0) {
                     // 間違った問題があったので復習ステージへ
                     setStage(STAGE.REVIEW_INTRO);
                 } else {
@@ -244,6 +245,7 @@ export default function IntervalTrainer() {
             setReviewIndex(0);
             setSelectedAnswer(null);
             setIsCorrect(null);
+            setHadWrong(null);
             setStage(STAGE.REVIEW);
         } else if (stage === STAGE.REVIEW) {
             // レビューは一巡したら完了
@@ -251,6 +253,7 @@ export default function IntervalTrainer() {
                 setReviewIndex((i) => i + 1);
                 setSelectedAnswer(null);
                 setIsCorrect(null);
+                setHadWrong(null);
             } else {
                 setStage(STAGE.COMPLETE);
             }
@@ -264,7 +267,22 @@ export default function IntervalTrainer() {
             setReviewIndex(0);
             setSelectedAnswer(null);
             setIsCorrect(null);
+            setHadWrong(null);
         }
+    }
+
+    function handleReset() {
+        if (!window.confirm("本当に初期画面に戻りますか？")) return;
+
+        setStage(STAGE.SETUP);
+        setQuestions([]);
+        setIndex(0);
+        setWrongIndices([]);
+        setReviewQueue([]);
+        setReviewIndex(0);
+        setSelectedAnswer(null);
+        setIsCorrect(null);
+        setHadWrong(null);
     }
 
     // Enterキーで次へ
@@ -284,7 +302,7 @@ export default function IntervalTrainer() {
     return (
         <div className="min-h-screen bg-slate-50 text-slate-900 flex items-center justify-center p-4">
             <div className="w-full max-w-3xl bg-white rounded-2xl shadow-xl p-6 md:p-8">
-                <Header />
+                <Header onReset={handleReset} stage={stage} />
                 {stage === STAGE.SETUP && (
                     <Setup
                         selectedIds={selectedIds}
@@ -328,14 +346,26 @@ export default function IntervalTrainer() {
     );
 }
 
-function Header() {
+function Header({ onReset, stage }) {
     return (
-        <div className="mb-6">
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">同時2音インターバル当てトレーナー</h1>
-            {/* <p className="text-sm text-slate-600 mt-1">中央のスピーカーで音を再生。選択して Enter か「次へ」で進みます。</p> */}
+        <div className="mb-6 flex items-center justify-between">
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+                同時2音インターバル当てトレーナー
+            </h1>
+
+            {/* SETUP画面以外で表示 */}
+            {stage !== STAGE.SETUP && (
+                <button
+                    onClick={onReset}
+                    className="px-3 py-2 text-sm rounded-xl border hover:bg-slate-100"
+                >
+                    初期画面へ
+                </button>
+            )}
         </div>
     );
 }
+
 
 function Setup({ selectedIds, onToggle, total, setTotal, onStart }) {
     return (
@@ -419,6 +449,7 @@ function Quiz({ question, index, total, selected, setSelected, isCorrect, onRepl
                     <button
                         key={c.id}
                         onClick={() => setSelected(c.id)}
+                        disabled={isCorrect === true} // 正解後は選択不可
                         className={
                             "text-left p-3 border rounded-xl hover:bg-slate-50 " +
                             (selected === c.id ? "border-indigo-500 ring-2 ring-indigo-300" : "")
