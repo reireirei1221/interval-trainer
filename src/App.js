@@ -120,9 +120,50 @@ class Synth {
         playOne(toFreq(rootHz, semitones), now + gap);
     }
 
+    playChord(rootHz, semitoneArray, opts = {}) {
+        const ctx = this.ensure();
+        const { duration = 2.4 } = opts;
+
+        const now = ctx.currentTime + 0.01;
+
+        semitoneArray.forEach(semi => {
+            const freq = toFreq(rootHz, semi);
+
+            const g = ctx.createGain();
+            g.connect(ctx.destination);
+
+            const o1 = ctx.createOscillator();
+            o1.type = "triangle";
+            o1.frequency.value = freq;
+
+            const o2 = ctx.createOscillator();
+            o2.type = "sine";
+            o2.frequency.value = freq * 2;
+
+            o1.connect(g);
+            o2.connect(g);
+
+            g.gain.setValueAtTime(0, now);
+            g.gain.linearRampToValueAtTime(0.2, now + 0.01);
+            g.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+            o1.start(now);
+            o2.start(now);
+
+            o1.stop(now + duration + 0.05);
+            o2.stop(now + duration + 0.05);
+        });
+    }
+
+
 }
 
 const synth = new Synth();
+
+const MODE = {
+    INTERVAL: "INTERVAL", // 2音
+    CHORD: "CHORD", // 3音
+}
 
 // === インターバル定義 ===
 // 日本語ラベルと半音数
@@ -140,6 +181,15 @@ const INTERVALS = [
     { id: "m7", label: "短7度", semitones: 10 },
     { id: "M7", label: "長7度", semitones: 11 },
     { id: "P8", label: "オクターブ(完全8度)", semitones: 12 },
+];
+
+// === 和音定義 ===
+// 長3和音、短3和音、減3和音、増3和音
+const CHORDS = [
+    { id: "M3", label: "長3和音", semitones: [0, 4, 7] },
+    { id: "m3", label: "短3和音", semitones: [0, 3, 7] },
+    { id: "dim", label: "減3和音", semitones: [0, 3, 6] },
+    { id: "aug", label: "増3和音", semitones: [0, 4, 8] },
 ];
 
 // 問題データ型
@@ -167,6 +217,21 @@ function shuffle(arr) {
     return a;
 }
 
+function makeChordQuestion(allowedChords) {
+    const pick = allowedChords[Math.floor(Math.random() * allowedChords.length)];
+
+    const root = randomRootHz(12);
+
+    return {
+        rootHz: root,
+        chordId: pick.id,
+        label: pick.label,
+        semitones: pick.semitones,
+        choices: allowedChords.map(c => ({ id: c.id, label: c.label })),
+    };
+}
+
+
 // 進行段階
 const STAGE = {
     SETUP: "SETUP",
@@ -191,6 +256,13 @@ export default function IntervalTrainer() {
         () => INTERVALS.filter((i) => selectedIds.includes(i.id)),
         [selectedIds]
     );
+
+    const allowedChords = useMemo(
+        () => CHORDS.filter((c) => selectedIds.includes(c.id)),
+        [selectedIds]
+    );
+
+    const [mode, setMode] = useState(null); // null → 選択画面
 
     // クイズ用ステート
 
@@ -235,12 +307,19 @@ export default function IntervalTrainer() {
     function playCurrent() {
         if (!currentQuestion) return;
 
-        if (playMode === "harmonic") {
-            synth.playDyad(currentQuestion.rootHz, currentQuestion.semitones);
-        } else {
-            synth.playMelodic(currentQuestion.rootHz, currentQuestion.semitones);
+        if (mode === MODE.INTERVAL) {
+            if (playMode === "harmonic") {
+                synth.playDyad(currentQuestion.rootHz, currentQuestion.semitones);
+            } else {
+                synth.playMelodic(currentQuestion.rootHz, currentQuestion.semitones);
+            }
+        }
+
+        if (mode === MODE.CHORD) {
+            synth.playChord(currentQuestion.rootHz, currentQuestion.semitones);
         }
     }
+
 
     function handleToggleInterval(id) {
         setSelectedIds((prev) =>
@@ -250,76 +329,112 @@ export default function IntervalTrainer() {
 
     // スタートボタンが押されたとき、問題を生成してクイズを開始する関数
     function handleStart() {
-        // 許可されたインターバルが2つ未満の場合は終了
-        if (allowed.length < 2) return;
-        // 出題数が1未満の場合は終了
         if (total < 1) return;
-        // 音声コンテキストを初期化
         synth.ensure();
 
-        // 👇 追加：均等なインターバル配列を作る
-        const baseCount = Math.floor(total / allowed.length);
-        const remainder = total % allowed.length;
+        if (mode === MODE.INTERVAL) {
+            if (allowed.length < 2) return;
 
-        let intervalPool = [];
+            const baseCount = Math.floor(total / allowed.length);
+            const remainder = total % allowed.length;
 
-        // 各インターバルを均等に追加
-        allowed.forEach((it) => {
-            for (let i = 0; i < baseCount; i++) {
-                intervalPool.push(it);
+            let pool = [];
+
+            allowed.forEach((it) => {
+                for (let i = 0; i < baseCount; i++) {
+                    pool.push(it);
+                }
+            });
+
+            const shuffled = shuffle(allowed);
+            for (let i = 0; i < remainder; i++) {
+                pool.push(shuffled[i]);
             }
-        });
 
-        // 余り分をランダムで追加
-        const shuffledAllowed = shuffle(allowed);
-        for (let i = 0; i < remainder; i++) {
-            intervalPool.push(shuffledAllowed[i]);
-        }
+            pool = shuffle(pool);
 
-        // シャッフル
-        intervalPool = shuffle(intervalPool);
-
-        // 👇 ここで問題生成
-        const qs = intervalPool.map((it) => {
-            const maxSemi = Math.max(...allowed.map((i) => i.semitones));
-            const root = randomRootHz(maxSemi);
-
-            return {
-                rootHz: root,
+            const qs = pool.map((it) => ({
+                rootHz: randomRootHz(12),
                 intervalId: it.id,
                 label: it.label,
-                semitones: it.semitones,
+                semitones: it.semitones, // ← number
                 choices: allowed.map((i) => ({ id: i.id, label: i.label })),
-            };
-        });
-        
-        setQuestions(qs);
+            }));
 
-        const initialStats = {};
-        qs.forEach((q) => {
-            if (!initialStats[q.intervalId]) {
-                initialStats[q.intervalId] = { total: 0, wrong: 0 };
+            setQuestions(qs);
+        }
+
+        if (mode === MODE.CHORD) {
+            const allowedChords = CHORDS.filter(c => selectedIds.includes(c.id));
+            if (allowedChords.length < 2) return;
+
+            const baseCount = Math.floor(total / allowedChords.length);
+            const remainder = total % allowedChords.length;
+
+            let pool = [];
+
+            // 均等に配る
+            allowedChords.forEach((chord) => {
+                for (let i = 0; i < baseCount; i++) {
+                    pool.push(chord);
+                }
+            });
+
+            // 余りをランダムで追加
+            const shuffled = shuffle(allowedChords);
+            for (let i = 0; i < remainder; i++) {
+                pool.push(shuffled[i]);
             }
-            initialStats[q.intervalId].total++;
-        });
-        setStats(initialStats);
 
-        // 問題のインデックスを初期化
+            // 最後に全体シャッフル
+            pool = shuffle(pool);
+
+            const qs = pool.map((chord) => ({
+                rootHz: randomRootHz(12),
+                chordId: chord.id,
+                label: chord.label,
+                semitones: chord.semitones,
+                choices: allowedChords.map(c => ({ id: c.id, label: c.label })),
+            }));
+
+            setQuestions(qs);
+        }
+
+
         setIndex(0);
-        // 選択された回答を初期化
         setSelectedAnswer(null);
-        // 正誤判定を初期化
         setIsCorrect(null);
-        // 間違った問題のIndex配列を初期化
         setWrongIndices([]);
-        // ステージをQUIZに変更
         setStage(STAGE.QUIZ);
+
+        // ★ stats初期化
+        const initialStats = {};
+
+        if (mode === MODE.INTERVAL) {
+            allowed.forEach(i => {
+                initialStats[i.id] = { total: 0, wrong: 0 };
+            });
+        }
+
+        if (mode === MODE.CHORD) {
+            const allowedChords = CHORDS.filter(c => selectedIds.includes(c.id));
+            allowedChords.forEach(c => {
+                initialStats[c.id] = { total: 0, wrong: 0 };
+            });
+        }
+
+        setStats(initialStats);
     }
+
 
     function handleSelectChoice(id) {
         if (!currentQuestion) return;
         setSelectedAnswer(id);
-        const ok = id === currentQuestion.intervalId;
+        const correctId = mode === MODE.INTERVAL
+            ? currentQuestion.intervalId
+            : currentQuestion.chordId;
+
+        const ok = id === correctId;
         setIsCorrect(ok);
 
         if (!ok) {
@@ -330,6 +445,18 @@ export default function IntervalTrainer() {
     // 次へボタンが押されたとき、クイズの進行やレビューの進行を制御する関数
     function handleNext() {
         if (stage === STAGE.QUIZ) {
+
+            const q = questions[index];
+
+            // ★ totalを毎回カウント
+            setStats((prev) => ({
+                ...prev,
+                [q.intervalId ?? q.chordId]: {
+                    ...prev[q.intervalId ?? q.chordId],
+                    total: prev[q.intervalId ?? q.chordId].total + 1,
+                },
+            }));
+
             // // wasWrongは、isCorrectの反転
             // const wasWrong = isCorrect === false;
             // もし間違っていたら、wrongIndicesに現在のindexを追加
@@ -435,7 +562,10 @@ export default function IntervalTrainer() {
         <div className="min-h-screen bg-slate-50 text-slate-900 flex items-center justify-center p-4">
             <div className="w-full max-w-3xl bg-white rounded-2xl shadow-xl p-6 md:p-8">
                 <Header onReset={handleReset} stage={stage} />
-                {stage === STAGE.SETUP && (
+                {stage === STAGE.SETUP && mode == null && (
+                    <ModeSelect onSelect={setMode} />
+                )}
+                {stage === STAGE.SETUP && mode === MODE.INTERVAL && (
                     <Setup
                         selectedIds={selectedIds}
                         onToggle={handleToggleInterval}
@@ -444,6 +574,15 @@ export default function IntervalTrainer() {
                         onStart={handleStart}
                         playMode={playMode}
                         setPlayMode={setPlayMode}
+                    />
+                )}
+                {stage === STAGE.SETUP && mode === MODE.CHORD && (
+                    <ChordSetup
+                        selectedIds={selectedIds}
+                        onToggle={handleToggleInterval}
+                        total={total}
+                        setTotal={setTotal}
+                        onStart={handleStart}
                     />
                 )}
                 {stage === STAGE.QUIZ && (
@@ -485,7 +624,7 @@ function Header({ onReset, stage }) {
     return (
         <div className="mb-6 flex items-center justify-between">
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-                同時2音インターバル当てトレーナー
+                相対音感トレーナー
             </h1>
 
             {/* SETUP画面以外で表示 */}
@@ -494,7 +633,7 @@ function Header({ onReset, stage }) {
                     onClick={onReset}
                     className="px-3 py-2 text-sm rounded-xl border hover:bg-slate-100"
                 >
-                    初期画面へ
+                    設定画面へ
                 </button>
             )}
         </div>
@@ -572,6 +711,46 @@ function Setup({ selectedIds, onToggle, total, setTotal, onStart, playMode, setP
     );
 }
 
+function ChordSetup({ selectedIds, onToggle, total, setTotal,onStart }) {
+    return (
+        <div className="space-y-4">
+            <h2 className="font-semibold">出題する和音を選択 (2個以上)</h2>
+            {CHORDS.map(c => (
+                <label key={c.id} className="flex items-center gap-2 p-3 border rounded-xl hover:bg-slate-50">
+                    <input
+                        type="checkbox"
+                        checked={selectedIds.includes(c.id)}
+                        onChange={() => onToggle(c.id)}
+                    />
+                    {c.label}
+                </label>
+            ))}
+            <section className="flex items-center gap-3">
+                <label className="font-semibold">出題数</label>
+                <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={total}
+                    onChange={(e) => setTotal(Math.max(1, Math.min(100, Number(e.target.value) || 1)))}
+                    className="w-24 rounded-xl border px-3 py-2"
+                />
+                <span className="text-slate-500 text-sm">問 (1〜100)</span>
+            </section>
+            <div className="flex justify-end">
+                <button
+                    onClick={onStart}
+                    disabled={selectedIds.length <= 1}
+                    className="px-5 py-3 rounded-2xl bg-indigo-600 text-white font-semibold disabled:opacity-40"
+                >
+                    スタート
+                </button>
+            </div>
+        </div>
+    );
+}
+
+
 function ProgressBar({ index, total, label }) {
     const pct = total > 0 ? Math.round(((index + 1) / total) * 100) : 0;
     return (
@@ -603,7 +782,7 @@ function Quiz({ question, index, total, selected, setSelected, isCorrect, onRepl
                     {/* スピーカーアイコン */}
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-10 h-10" fill="currentColor"><path d="M3 10v4a1 1 0 001 1h3l3.707 3.707A1 1 0 0012 18V6a1 1 0 00-1.293-.953L7 8H4a1 1 0 00-1 1z" /><path d="M16.5 8.25a.75.75 0 011.5 0v7.5a.75.75 0 01-1.5 0v-7.5zM14 6a1 1 0 011.707-.707 8 8 0 010 13.414A1 1 0 0114 18.999 10 10 0 0014 6z" /></svg>
                 </button>
-                <p className="text-slate-600 text-sm">ページ遷移時に自動再生されます。聞き直すときは上のボタン。</p>
+                <p className="text-slate-600 text-sm">聞き直すときは上のボタンを押してね！</p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
@@ -657,7 +836,7 @@ function ReviewIntro({ count, stats, onNext }) {
 
             {allCorrect ? (
                 <p className="text-emerald-700 font-semibold">
-                    全問正解！🎉
+                    すごいね！全問正解！🎉
                 </p>
             ) : (
                 <p>
@@ -679,7 +858,7 @@ function ReviewIntro({ count, stats, onNext }) {
                             <div key={id} className="flex justify-between">
                                 <span>{label}</span>
                                 <span>
-                                    {s.total - s.wrong} / {s.total}問（正答率 {rate}%）
+                                    {s.total - s.wrong} / {s.total} 問（正答率 {rate}%）
                                 </span>
                             </div>
                         );
@@ -712,3 +891,28 @@ function Complete({ onNext }) {
         </div>
     );
 }
+
+function ModeSelect({ onSelect }) {
+    return (
+        <div className="space-y-6 text-center">
+            <h2 className="text-xl font-semibold">出題モードを選択</h2>
+
+            <div className="flex gap-4 justify-center">
+                <button
+                    onClick={() => onSelect(MODE.INTERVAL)}
+                    className="px-6 py-4 rounded-2xl bg-indigo-600 text-white"
+                >
+                    2音（インターバル）
+                </button>
+
+                <button
+                    onClick={() => onSelect(MODE.CHORD)}
+                    className="px-6 py-4 rounded-2xl bg-indigo-600 text-white"
+                >
+                    3音（和音）
+                </button>
+            </div>
+        </div>
+    );
+}
+
