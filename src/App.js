@@ -34,7 +34,7 @@ class Synth {
             duration = 1.2, // 秒
             type = "sine",
             gain = 0.18, // 合計がクリップしない程度
-            attack = 0.02,
+            attack = 0.08,
             release = 0.18,
         } = opts;
 
@@ -69,13 +69,13 @@ const synth = new Synth();
 // === インターバル定義 ===
 // 日本語ラベルと半音数
 const INTERVALS = [
-    { id: "P1", label: "ユニゾン(完全1度)", semitones: 0 },
+//    { id: "P1", label: "ユニゾン(完全1度)", semitones: 0 },
     { id: "m2", label: "短2度", semitones: 1 },
     { id: "M2", label: "長2度", semitones: 2 },
     { id: "m3", label: "短3度", semitones: 3 },
     { id: "M3", label: "長3度", semitones: 4 },
     { id: "P4", label: "完全4度", semitones: 5 },
-    { id: "TT", label: "トライトーン(増4度/減5度)", semitones: 6 },
+    { id: "TT", label: "増4度 (減5度)", semitones: 6 },
     { id: "P5", label: "完全5度", semitones: 7 },
     { id: "m6", label: "短6度", semitones: 8 },
     { id: "M6", label: "長6度", semitones: 9 },
@@ -86,7 +86,9 @@ const INTERVALS = [
 
 // 問題データ型
 function makeQuestion(allowedIntervals) {
+    // 許可されたインターバルの配列から、ランダムに一つ選択
     const pick = allowedIntervals[Math.floor(Math.random() * allowedIntervals.length)];
+
     const maxSemi = Math.max(...allowedIntervals.map((i) => i.semitones));
     const root = randomRootHz(maxSemi);
     return {
@@ -117,24 +119,39 @@ const STAGE = {
 };
 
 export default function IntervalTrainer() {
+    // 進行段階の初期値をSETUPに設定
     const [stage, setStage] = useState(STAGE.SETUP);
-    const [selectedIds, setSelectedIds] = useState(["P4", "P5", "M3", "m3", "M6", "m6"]);
+    // 出題する (許可される) インターバルのidの初期値を設定
+    const [selectedIds, setSelectedIds] = useState(["M3", "m3"]);
+    // 出題数の初期値を設定
     const [total, setTotal] = useState(10);
 
+    // 許可されたインターバルのidを持つ、インターバルの配列をメモ化
     const allowed = useMemo(
         () => INTERVALS.filter((i) => selectedIds.includes(i.id)),
         [selectedIds]
     );
 
     // クイズ用ステート
+
+    // 問題を格納する配列
     const [questions, setQuestions] = useState([]); // {rootHz, intervalId, label, semitones, choices[]}
+    // 現在、questionsの中で、何番目の問題かを表すIndex
     const [index, setIndex] = useState(0);
+    // 選択された回答を格納する変数
     const [selectedAnswer, setSelectedAnswer] = useState(null);
+    // 選択された回答が正しいかを格納する変数
     const [isCorrect, setIsCorrect] = useState(null); // true/false/null
+    // 間違った問題のIndexを格納する配列
     const [wrongIndices, setWrongIndices] = useState([]);
+    // その問題を一度でもミスしたかを格納する変数
+    const [hadWrong, setHadWrong] = useState(false);
 
     // レビュー用
+
+    // 復習用の問題が、questionsの何番目かを表すIndexの配列
     const [reviewQueue, setReviewQueue] = useState([]); // インデックス配列
+    // 復習用の問題で、何番目かを表すIndex
     const [reviewIndex, setReviewIndex] = useState(0); // reviewQueue内での位置
 
     // 再生の自動化
@@ -152,6 +169,7 @@ export default function IntervalTrainer() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentQuestion]);
 
+    // 現在の問題の音源を再生する
     function playCurrent() {
         if (!currentQuestion) return;
         synth.playDyad(currentQuestion.rootHz, currentQuestion.semitones);
@@ -163,17 +181,26 @@ export default function IntervalTrainer() {
         );
     }
 
+    // スタートボタンが押されたとき、問題を生成してクイズを開始する関数
     function handleStart() {
-        if (allowed.length === 0) return;
+        // 許可されたインターバルが2つ未満の場合は終了
+        if (allowed.length < 2) return;
+        // 出題数が1未満の場合は終了
         if (total < 1) return;
         // 音声コンテキストを初期化
         synth.ensure();
+        // 問題を生成
         const qs = Array.from({ length: total }, () => makeQuestion(allowed));
         setQuestions(qs);
+        // 問題のインデックスを初期化
         setIndex(0);
+        // 選択された回答を初期化
         setSelectedAnswer(null);
+        // 正誤判定を初期化
         setIsCorrect(null);
+        // 間違った問題のIndex配列を初期化
         setWrongIndices([]);
+        // ステージをQUIZに変更
         setStage(STAGE.QUIZ);
     }
 
@@ -182,11 +209,18 @@ export default function IntervalTrainer() {
         setSelectedAnswer(id);
         const ok = id === currentQuestion.intervalId;
         setIsCorrect(ok);
+
+        if (!ok) {
+            setHadWrong(true); // 一度でも間違えたら記録
+        }
     }
 
+    // 次へボタンが押されたとき、クイズの進行やレビューの進行を制御する関数
     function handleNext() {
         if (stage === STAGE.QUIZ) {
+            // wasWrongは、isCorrectの反転
             const wasWrong = isCorrect === false;
+            // もし間違っていたら、wrongIndicesに現在のindexを追加
             if (wasWrong) setWrongIndices((w) => [...w, index]);
 
             if (index + 1 < questions.length) {
@@ -196,12 +230,15 @@ export default function IntervalTrainer() {
             } else {
                 // 終了 → 復習判定
                 if (wrongIndices.concat(wasWrong ? [index] : []).length > 0) {
+                    // 間違った問題があったので復習ステージへ
                     setStage(STAGE.REVIEW_INTRO);
                 } else {
+                    // 正解率100% → 完了
                     setStage(STAGE.COMPLETE);
                 }
             }
         } else if (stage === STAGE.REVIEW_INTRO) {
+            // 重複を排除して復習する問題のIndex配列を作成
             const queue = [...new Set(wrongIndices)];
             setReviewQueue(queue);
             setReviewIndex(0);
@@ -295,7 +332,7 @@ function Header() {
     return (
         <div className="mb-6">
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight">同時2音インターバル当てトレーナー</h1>
-            <p className="text-sm text-slate-600 mt-1">中央のスピーカーで音を再生。選択して Enter か「次へ」で進みます。</p>
+            {/* <p className="text-sm text-slate-600 mt-1">中央のスピーカーで音を再生。選択して Enter か「次へ」で進みます。</p> */}
         </div>
     );
 }
@@ -304,7 +341,7 @@ function Setup({ selectedIds, onToggle, total, setTotal, onStart }) {
     return (
         <div className="space-y-6">
             <section>
-                <h2 className="font-semibold mb-2">出題するインターバルを選択</h2>
+                <h2 className="font-semibold mb-2">出題するインターバルを選択 (2個以上)</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {INTERVALS.map((it) => (
                         <label key={it.id} className="flex items-center gap-2 p-3 border rounded-xl hover:bg-slate-50">
@@ -319,7 +356,7 @@ function Setup({ selectedIds, onToggle, total, setTotal, onStart }) {
                 </div>
             </section>
             <section className="flex items-center gap-3">
-                <label className="font-semibold">出題数 N</label>
+                <label className="font-semibold">出題数</label>
                 <input
                     type="number"
                     min={1}
@@ -328,12 +365,12 @@ function Setup({ selectedIds, onToggle, total, setTotal, onStart }) {
                     onChange={(e) => setTotal(Math.max(1, Math.min(100, Number(e.target.value) || 1)))}
                     className="w-24 rounded-xl border px-3 py-2"
                 />
-                <span className="text-slate-500 text-sm">(1〜100)</span>
+                <span className="text-slate-500 text-sm">問 (1〜100)</span>
             </section>
             <div className="flex justify-end">
                 <button
                     onClick={onStart}
-                    disabled={selectedIds.length === 0}
+                    disabled={selectedIds.length <= 1}
                     className="px-5 py-3 rounded-2xl bg-indigo-600 text-white font-semibold disabled:opacity-40"
                 >
                     スタート
