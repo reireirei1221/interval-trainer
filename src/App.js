@@ -146,6 +146,8 @@ export default function IntervalTrainer() {
     const [wrongIndices, setWrongIndices] = useState([]);
     // その問題を一度でもミスしたかを格納する変数
     const [hadWrong, setHadWrong] = useState(false);
+    // 各インターバルごとの出題数、誤答数を格納するオブジェクト
+    const [stats, setStats] = useState({}); // { [intervalId]: { total: number, wrong: number } }
 
     // レビュー用
 
@@ -192,6 +194,16 @@ export default function IntervalTrainer() {
         // 問題を生成
         const qs = Array.from({ length: total }, () => makeQuestion(allowed));
         setQuestions(qs);
+
+        const initialStats = {};
+        qs.forEach((q) => {
+            if (!initialStats[q.intervalId]) {
+                initialStats[q.intervalId] = { total: 0, wrong: 0 };
+            }
+            initialStats[q.intervalId].total++;
+        });
+        setStats(initialStats);
+
         // 問題のインデックスを初期化
         setIndex(0);
         // 選択された回答を初期化
@@ -221,7 +233,19 @@ export default function IntervalTrainer() {
             // // wasWrongは、isCorrectの反転
             // const wasWrong = isCorrect === false;
             // もし間違っていたら、wrongIndicesに現在のindexを追加
-            if (hadWrong) setWrongIndices((w) => [...w, index]);
+            if (hadWrong) {
+                setWrongIndices((w) => [...w, index]);
+
+                // ★追加：intervalごとにwrongを+1
+                const q = questions[index];
+                setStats((prev) => ({
+                    ...prev,
+                    [q.intervalId]: {
+                        ...prev[q.intervalId],
+                        wrong: prev[q.intervalId].wrong + 1,
+                    },
+                }));
+            }
 
             if (index + 1 < questions.length) {
                 setIndex((i) => i + 1);
@@ -229,16 +253,24 @@ export default function IntervalTrainer() {
                 setIsCorrect(null);
                 setHadWrong(null);
             } else {
-                // 終了 → 復習判定
-                if (wrongIndices.concat(hadWrong ? [index] : []).length > 0) {
-                    // 間違った問題があったので復習ステージへ
-                    setStage(STAGE.REVIEW_INTRO);
-                } else {
-                    // 正解率100% → 完了
-                    setStage(STAGE.COMPLETE);
-                }
+                setStage(STAGE.REVIEW_INTRO);
             }
         } else if (stage === STAGE.REVIEW_INTRO) {
+
+            if (wrongIndices.length === 0) {
+                // 正解率100% → 初期画面へ
+                setStage(STAGE.SETUP);
+                setQuestions([]);
+                setIndex(0);
+                setWrongIndices([]);
+                setReviewQueue([]);
+                setReviewIndex(0);
+                setSelectedAnswer(null);
+                setIsCorrect(null);
+                setHadWrong(null);
+                return;
+            }
+
             // 重複を排除して復習する問題のIndex配列を作成
             const queue = [...new Set(wrongIndices)];
             setReviewQueue(queue);
@@ -325,7 +357,8 @@ export default function IntervalTrainer() {
                     />
                 )}
                 {stage === STAGE.REVIEW_INTRO && (
-                    <ReviewIntro count={wrongIndices.length} onNext={handleNext} />
+                    <ReviewIntro count={wrongIndices.length} stats={stats} onNext={handleNext} />
+
                 )}
                 {stage === STAGE.REVIEW && (
                     <Quiz
@@ -486,20 +519,58 @@ function Quiz({ question, index, total, selected, setSelected, isCorrect, onRepl
     );
 }
 
-function ReviewIntro({ count, onNext }) {
+function ReviewIntro({ count, stats, onNext }) {
+    const allCorrect = count === 0;
+
     return (
         <div className="space-y-6">
             <h2 className="text-xl font-semibold">結果</h2>
-            <p>
-                全ての問題が終わりました。間違えた問題は <b>{count}</b> 問でした。<br />
-                間違えた問題を復習しましょう。
-            </p>
+
+            {allCorrect ? (
+                <p className="text-emerald-700 font-semibold">
+                    全問正解！🎉
+                </p>
+            ) : (
+                <p>
+                    間違えた問題は <b>{count}</b> 問でした。
+                </p>
+            )}
+
+            {/* ★追加：詳細表示 */}
+            <div className="border rounded-xl p-4 bg-slate-50">
+                <h3 className="font-semibold mb-2">インターバル別成績</h3>
+
+                <div className="space-y-1 text-sm">
+                    {Object.entries(stats).map(([id, s]) => {
+                        const rate = Math.round(((s.total - s.wrong) / s.total) * 100);
+
+                        const label = INTERVALS.find(i => i.id === id)?.label;
+
+                        return (
+                            <div key={id} className="flex justify-between">
+                                <span>{label}</span>
+                                <span>
+                                    {s.total - s.wrong} / {s.total}問（正答率 {rate}%）
+                                </span>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
             <div className="flex justify-end">
-                <button onClick={onNext} className="px-5 py-3 rounded-2xl bg-indigo-600 text-white font-semibold">復習を始める (Enter)</button>
+                <button
+                    onClick={onNext}
+                    className="px-5 py-3 rounded-2xl bg-indigo-600 text-white font-semibold"
+                >
+                    {allCorrect ? "完了へ (Enter)" : "復習を始める (Enter)"}
+                </button>
             </div>
         </div>
     );
 }
+
+
 
 function Complete({ onNext }) {
     return (
