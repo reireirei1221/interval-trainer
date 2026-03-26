@@ -31,37 +31,95 @@ class Synth {
     playDyad(rootHz, semitones, opts = {}) {
         const ctx = this.ensure();
         const {
-            duration = 1.2, // 秒
-            type = "sine",
-            gain = 0.18, // 合計がクリップしない程度
-            attack = 0.08,
-            release = 0.18,
+            duration = 2.4,
         } = opts;
 
-        const now = ctx.currentTime + 0.01; // クリック回避のためごく僅かに遅らせる
+        const now = ctx.currentTime + 0.01;
 
-        const g = ctx.createGain();
-        g.gain.setValueAtTime(0, now);
-        g.gain.linearRampToValueAtTime(gain, now + attack);
-        g.gain.setTargetAtTime(0, now + attack + duration, release);
-        g.connect(ctx.destination);
+        const playOne = (freq, startTime, duration) => {
+            const g = ctx.createGain();
+            g.connect(ctx.destination);
 
-        const o1 = ctx.createOscillator();
-        o1.type = type;
-        o1.frequency.value = rootHz;
-        o1.connect(g);
+            // 🎹 基音
+            const o1 = ctx.createOscillator();
+            o1.type = "triangle";
+            o1.frequency.value = freq;
 
-        const o2 = ctx.createOscillator();
-        o2.type = type;
-        o2.frequency.value = toFreq(rootHz, semitones);
-        o2.connect(g);
+            // 🎹 倍音（軽く）
+            const o2 = ctx.createOscillator();
+            o2.type = "sine";
+            o2.frequency.value = freq * 2;
 
-        o1.start(now);
-        o2.start(now);
-        const stopAt = now + attack + duration + release * 3;
-        o1.stop(stopAt);
-        o2.stop(stopAt);
+            o1.connect(g);
+            o2.connect(g);
+
+            // 🎯 ピアノ風エンベロープ
+            g.gain.setValueAtTime(0, startTime);
+            g.gain.linearRampToValueAtTime(0.25, startTime + 0.01); // 速いアタック
+            g.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+
+            o1.start(startTime);
+            o2.start(startTime);
+
+            o1.stop(startTime + duration + 0.05);
+            o2.stop(startTime + duration + 0.05);
+        };
+
+        playOne(rootHz, now, duration);
+        playOne(toFreq(rootHz, semitones), now, duration);
     }
+
+
+    playMelodic(rootHz, semitones, opts = {}) {
+        const ctx = this.ensure();
+        const {
+            duration = 1.4,
+            gap = 0.3,
+        } = opts;
+
+        const now = ctx.currentTime + 0.01;
+
+        const endTime = now + duration + gap + duration;
+
+        const playOne = (freq, startTime) => {
+            const noteDuration = endTime - startTime;
+
+            const g = ctx.createGain();
+            g.connect(ctx.destination);
+
+            // 🎹 基音
+            const o1 = ctx.createOscillator();
+            o1.type = "triangle";
+            o1.frequency.value = freq;
+
+            // 🎹 倍音
+            const o2 = ctx.createOscillator();
+            o2.type = "sine";
+            o2.frequency.value = freq * 2;
+
+            // 🎯 微妙なズレ（リアル感）
+            o1.detune.value = (Math.random() - 0.5) * 6;
+            o2.detune.value = (Math.random() - 0.5) * 6;
+
+            o1.connect(g);
+            o2.connect(g);
+
+            // 🎯 ピアノエンベロープ
+            g.gain.setValueAtTime(0, startTime);
+            g.gain.linearRampToValueAtTime(0.25, startTime + 0.01);
+            g.gain.exponentialRampToValueAtTime(0.001, startTime + noteDuration);
+
+            o1.start(startTime);
+            o2.start(startTime);
+
+            o1.stop(startTime + noteDuration + 0.05);
+            o2.stop(startTime + noteDuration + 0.05);
+        };
+
+        playOne(rootHz, now);
+        playOne(toFreq(rootHz, semitones), now + gap);
+    }
+
 }
 
 const synth = new Synth();
@@ -125,6 +183,8 @@ export default function IntervalTrainer() {
     const [selectedIds, setSelectedIds] = useState(["M3", "m3"]);
     // 出題数の初期値を設定
     const [total, setTotal] = useState(10);
+    // 再生モード (同時 or ずらし)
+    const [playMode, setPlayMode] = useState("harmonic");
 
     // 許可されたインターバルのidを持つ、インターバルの配列をメモ化
     const allowed = useMemo(
@@ -174,7 +234,12 @@ export default function IntervalTrainer() {
     // 現在の問題の音源を再生する
     function playCurrent() {
         if (!currentQuestion) return;
-        synth.playDyad(currentQuestion.rootHz, currentQuestion.semitones);
+
+        if (playMode === "harmonic") {
+            synth.playDyad(currentQuestion.rootHz, currentQuestion.semitones);
+        } else {
+            synth.playMelodic(currentQuestion.rootHz, currentQuestion.semitones);
+        }
     }
 
     function handleToggleInterval(id) {
@@ -342,6 +407,8 @@ export default function IntervalTrainer() {
                         total={total}
                         setTotal={setTotal}
                         onStart={handleStart}
+                        playMode={playMode}
+                        setPlayMode={setPlayMode}
                     />
                 )}
                 {stage === STAGE.QUIZ && (
@@ -400,7 +467,8 @@ function Header({ onReset, stage }) {
 }
 
 
-function Setup({ selectedIds, onToggle, total, setTotal, onStart }) {
+function Setup({ selectedIds, onToggle, total, setTotal, onStart, playMode, setPlayMode })
+ {
     return (
         <div className="space-y-6">
             <section>
@@ -429,6 +497,32 @@ function Setup({ selectedIds, onToggle, total, setTotal, onStart }) {
                     className="w-24 rounded-xl border px-3 py-2"
                 />
                 <span className="text-slate-500 text-sm">問 (1〜100)</span>
+            </section>
+            <section>
+                <h2 className="font-semibold mb-2">再生モード</h2>
+                <div className="flex gap-3">
+                    <label className="flex items-center gap-2">
+                        <input
+                            type="radio"
+                            name="mode"
+                            value="harmonic"
+                            checked={playMode === "harmonic"}
+                            onChange={() => setPlayMode("harmonic")}
+                        />
+                        同時再生
+                    </label>
+
+                    <label className="flex items-center gap-2">
+                        <input
+                            type="radio"
+                            name="mode"
+                            value="melodic"
+                            checked={playMode === "melodic"}
+                            onChange={() => setPlayMode("melodic")}
+                        />
+                        ずらして再生
+                    </label>
+                </div>
             </section>
             <div className="flex justify-end">
                 <button
