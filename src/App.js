@@ -256,8 +256,43 @@ export default function IntervalTrainer() {
         if (total < 1) return;
         // 音声コンテキストを初期化
         synth.ensure();
-        // 問題を生成
-        const qs = Array.from({ length: total }, () => makeQuestion(allowed));
+
+        // 👇 追加：均等なインターバル配列を作る
+        const baseCount = Math.floor(total / allowed.length);
+        const remainder = total % allowed.length;
+
+        let intervalPool = [];
+
+        // 各インターバルを均等に追加
+        allowed.forEach((it) => {
+            for (let i = 0; i < baseCount; i++) {
+                intervalPool.push(it);
+            }
+        });
+
+        // 余り分をランダムで追加
+        const shuffledAllowed = shuffle(allowed);
+        for (let i = 0; i < remainder; i++) {
+            intervalPool.push(shuffledAllowed[i]);
+        }
+
+        // シャッフル
+        intervalPool = shuffle(intervalPool);
+
+        // 👇 ここで問題生成
+        const qs = intervalPool.map((it) => {
+            const maxSemi = Math.max(...allowed.map((i) => i.semitones));
+            const root = randomRootHz(maxSemi);
+
+            return {
+                rootHz: root,
+                intervalId: it.id,
+                label: it.label,
+                semitones: it.semitones,
+                choices: allowed.map((i) => ({ id: i.id, label: i.label })),
+            };
+        });
+        
         setQuestions(qs);
 
         const initialStats = {};
