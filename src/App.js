@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 // Constants
-import { INTERVALS, CHORDS, INVERSIONS, MODE, STAGE } from "./constants/music";
+import { INTERVALS, CHORDS, INVERSIONS, RESONANCE_INTERVALS, MODE, STAGE } from "./constants/music";
 
 // Hooks
 import { useAudio } from "./hooks/useAudio";
@@ -15,8 +15,10 @@ import { Complete } from "./components/Complete";
 import { Setup } from "./components/Setup";
 import { ReviewIntro } from "./components/ReviewIntro";
 import { Quiz } from "./components/Quiz";
+import { ResonanceQuiz } from "./components/ResonanceQuiz";
 import { ChordSetup } from "./components/ChordSetup";
-import { randomRootHz, shuffle, applyInversion } from "./utils/musicUtils";
+import { randomRootHz, shuffle } from "./utils/musicUtils";
+import { ResonanceSetup } from "./components/ResonanceSetup";
 
 
 export default function IntervalTrainer() {
@@ -43,13 +45,17 @@ export default function IntervalTrainer() {
         [selectedIds]
     );
 
+    const allowedResonance = useMemo(
+        () => RESONANCE_INTERVALS.filter((r) => selectedIds.includes(r.id)),
+        [selectedIds]
+    );
+
     const [mode, setMode] = useState(null); // null → 選択画面
 
     // 和音の展開形を選択するためのステート
     const [selectedInversions, setSelectedInversions] = useState(["root"]);
 
     // クイズ用ステート
-
     // 問題を格納する配列
     const [questions, setQuestions] = useState([]); // {rootHz, intervalId, label, semitones, choices[]}
     // 現在、questionsの中で、何番目の問題かを表すIndex
@@ -64,11 +70,12 @@ export default function IntervalTrainer() {
     const [hadWrong, setHadWrong] = useState(false);
     // 各インターバルごとの出題数、誤答数を格納するオブジェクト
     const [stats, setStats] = useState({}); // { [intervalId]: { total: number, wrong: number } }
+
+    const [sliderValue, setSliderValue] = useState(0);
     
     
 
     // レビュー用
-
     // 復習用の問題が、questionsの何番目かを表すIndexの配列
     const [reviewQueue, setReviewQueue] = useState([]); // インデックス配列
     // 復習用の問題で、何番目かを表すIndex
@@ -83,11 +90,27 @@ export default function IntervalTrainer() {
 
     // 質問切替時の自動再生
     useEffect(() => {
+
+        if (mode === MODE.RESONANCE) {
+            synth.stopResonance();
+            setSliderValue(0);
+        }
+
         if (!currentQuestion) return;
+        // RESONANCEモードの時は、音を止める
+        
         // 初回はstartボタンでユーザ操作済みのため再生可能
         playCurrent();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentQuestion]);
+
+    // 👇 ここに追加する
+    useEffect(() => {
+        if (!currentQuestion) return;
+        if (mode !== MODE.RESONANCE) return;
+
+        playCurrent();
+    }, [sliderValue, currentQuestion, mode]);
 
     // 現在の問題の音源を再生する
     function playCurrent() {
@@ -104,6 +127,27 @@ export default function IntervalTrainer() {
         if (mode === MODE.CHORD) {
             synth.playChord(currentQuestion.rootHz, currentQuestion.semitones);
         }
+
+        if (mode === MODE.RESONANCE) {
+            synth.playDetunedInterval(
+                currentQuestion.rootHz,
+                currentQuestion.semitones,
+                currentQuestion.targetDetune + sliderValue
+            );
+            return;
+        }
+    }
+
+    function handleAnswer() {
+        const error = Math.abs(sliderValue + currentQuestion.targetDetune);
+
+        console.log("Error:", error);
+
+        const ok = error < 5; // 5セント以内なら正解
+
+        setIsCorrect(ok);
+
+        if (!ok) setHadWrong(true);
     }
 
 
@@ -150,73 +194,56 @@ export default function IntervalTrainer() {
         setIsCorrect(null);
         setHadWrong(null);
         setShowExitPopup(false);
+        setSliderValue(0);
     }
 
+    // ===== 共通 =====
+    function createBalancedPool(items, total) {
+        const baseCount = Math.floor(total / items.length);
+        const remainder = total % items.length;
 
+        let pool = [];
 
-
-    // スタートボタンが押されたとき、問題を生成してクイズを開始する関数
-    function handleStart() {
-        if (total < 1) return;
-        synth.ensure();
-
-        if (mode === MODE.INTERVAL) {
-            if (allowed.length < 2) return;
-
-            const baseCount = Math.floor(total / allowed.length);
-            const remainder = total % allowed.length;
-
-            let pool = [];
-
-            allowed.forEach((it) => {
-                for (let i = 0; i < baseCount; i++) {
-                    pool.push(it);
-                }
-            });
-
-            const shuffled = shuffle(allowed);
-            for (let i = 0; i < remainder; i++) {
-                pool.push(shuffled[i]);
+        items.forEach(item => {
+            for (let i = 0; i < baseCount; i++) {
+                pool.push(item);
             }
+        });
 
-            pool = shuffle(pool);
-
-            const qs = pool.map((it) => ({
-                rootHz: randomRootHz(12),
-                intervalId: it.id,
-                label: it.label,
-                semitones: it.semitones, // ← number
-                choices: allowed.map((i) => ({ id: i.id, label: i.label })),
-            }));
-
-            setQuestions(qs);
+        const shuffled = shuffle(items);
+        for (let i = 0; i < remainder; i++) {
+            pool.push(shuffled[i]);
         }
 
-        if (mode === MODE.CHORD) {
-            if (allowedChords.length < 2) return;
+        return shuffle(pool);
+    }
 
-            const baseCount = Math.floor(total / allowedChords.length);
-            const remainder = total % allowedChords.length;
+    function createInitialStats(items) {
+        return Object.fromEntries(
+            items.map(item => [item.id, { total: 0, wrong: 0 }])
+        );
+    }
 
-            let pool = [];
+    // ===== モード定義（ここが拡張ポイント）=====
+    const MODE_CONFIG = {
+        [MODE.INTERVAL]: {
+            getItems: () => allowed,
+            validate: (items) => items.length >= 2,
 
-            // 均等に配る
-            allowedChords.forEach((chord) => {
-                for (let i = 0; i < baseCount; i++) {
-                    pool.push(chord);
-                }
-            });
+            createQuestion: (item, context) => ({
+                rootHz: randomRootHz(12),
+                intervalId: item.id,
+                label: item.label,
+                semitones: item.semitones,
+                choices: context.items.map(i => ({ id: i.id, label: i.label })),
+            }),
+        },
 
-            // 余りをランダムで追加
-            const shuffled = shuffle(allowedChords);
-            for (let i = 0; i < remainder; i++) {
-                pool.push(shuffled[i]);
-            }
+        [MODE.CHORD]: {
+            getItems: () => allowedChords,
+            validate: (items) => items.length >= 2,
 
-            // 最後に全体シャッフル
-            pool = shuffle(pool);
-
-            const qs = pool.map((chord) => {
+            createQuestion: (chord, context) => {
                 const inversion =
                     selectedInversions[Math.floor(Math.random() * selectedInversions.length)];
 
@@ -226,40 +253,67 @@ export default function IntervalTrainer() {
                     rootHz: randomRootHz(12),
                     chordId: chord.id,
                     inversionId: inversion,
-                    label: chord.label + "（" +
-                        INVERSIONS.find(i => i.id === inversion).label + "）",
+                    label:
+                        chord.label +
+                        "（" +
+                        INVERSIONS.find(i => i.id === inversion).label +
+                        "）",
                     semitones: inverted,
-                    choices: allowedChords.map(c => ({ id: c.id, label: c.label })),
+                    choices: context.items.map(c => ({ id: c.id, label: c.label })),
                 };
-            });
+            },
+        },
+
+        [MODE.RESONANCE]: {
+            getItems: () => allowed,
+            validate: (items) => items.length >= 1,
+
+            createQuestion: (item, context) => ({
+                rootHz: randomRootHz(12),
+                intervalId: item.id,
+                label: item.label,
+                semitones: item.semitones,
+                choices: context.items.map(i => ({ id: i.id, label: i.label })),
+
+                // 👇 これが本質
+                targetDetune: Math.random() * 40 - 20, // -20〜+20
+
+                sliderMin: -20,
+                sliderMax: 20,
+            }),
+        },
+
+    };
 
 
-            setQuestions(qs);
-        }
+    function handleStart() {
+        if (total < 1) return;
 
+        const config = MODE_CONFIG[mode];
+        if (!config) return;
+
+        synth.ensure();
+
+        const items = config.getItems();
+
+        if (!config.validate(items)) return;
+
+        const pool = createBalancedPool(items, total);
+
+        const qs = pool.map(item =>
+            config.createQuestion(item, { items })
+        );
+
+        // ===== state更新 =====
+        setQuestions(qs);
         setIndex(0);
         setSelectedAnswer(null);
         setIsCorrect(null);
         setWrongIndices([]);
         setStage(STAGE.QUIZ);
+        setSliderValue(0);
 
-        // ★ stats初期化
-        const initialStats = {};
-
-        if (mode === MODE.INTERVAL) {
-            allowed.forEach(i => {
-                initialStats[i.id] = { total: 0, wrong: 0 };
-            });
-        }
-
-        if (mode === MODE.CHORD) {
-            const allowedChords = CHORDS.filter(c => selectedIds.includes(c.id));
-            allowedChords.forEach(c => {
-                initialStats[c.id] = { total: 0, wrong: 0 };
-            });
-        }
-
-        setStats(initialStats);
+        setStats(createInitialStats(items));
     }
 
 
@@ -281,126 +335,124 @@ export default function IntervalTrainer() {
         }
     }
 
-    // 次へボタンが押されたとき、クイズの進行やレビューの進行を制御する関数
-    function handleNext() {
-        if (stage === STAGE.QUIZ) {
+    // 共通リセット処理
+    function resetState() {
+        setQuestions([]);
+        setIndex(0);
+        setWrongIndices([]);
+        setReviewQueue([]);
+        setReviewIndex(0);
+        setSelectedAnswer(null);
+        setIsCorrect(null);
+        setHadWrong(null);
+        setSliderValue(0);
+    }
 
-            const q = questions[index];
+    // 回答状態のリセットだけ
+    function resetAnswerState() {
+        setSelectedAnswer(null);
+        setIsCorrect(null);
+        setHadWrong(null);
+    }
 
-            // ★ totalを毎回カウント
-            setStats((prev) => ({
-                ...prev,
-                [q.intervalId ?? q.chordId]: {
-                    ...prev[q.intervalId ?? q.chordId],
-                    total: prev[q.intervalId ?? q.chordId].total + 1,
-                },
-            }));
+    // 統計更新
+    function updateStats(q, wasWrong) {
+        const key = q.intervalId ?? q.chordId;
 
-            // // wasWrongは、isCorrectの反転
-            // const wasWrong = isCorrect === false;
-            // もし間違っていたら、wrongIndicesに現在のindexを追加
-            const key = q.intervalId ?? q.chordId;
+        setStats((prev) => ({
+            ...prev,
+            [key]: {
+                ...prev[key],
+                total: prev[key].total + 1,
+                wrong: wasWrong ? prev[key].wrong + 1 : prev[key].wrong,
+            },
+        }));
+    }
 
-            if (hadWrong) {
-                setWrongIndices((w) => [...w, index]);
-
-                setStats((prev) => ({
-                    ...prev,
-                    [key]: {
-                        ...prev[key],
-                        wrong: prev[key].wrong + 1,
-                    },
-                }));
-            }
-
-            if (index + 1 < questions.length) {
-                setIndex((i) => i + 1);
-                setSelectedAnswer(null);
-                setIsCorrect(null);
-                setHadWrong(null);
-            } else {
-                setStage(STAGE.REVIEW_INTRO);
-            }
-        } else if (stage === STAGE.REVIEW_INTRO) {
-
-            if (wrongIndices.length === 0) {
-                // 正解率100% → 初期画面へ
-                setStage(STAGE.SETUP);
-                setQuestions([]);
-                setIndex(0);
-                setWrongIndices([]);
-                setReviewQueue([]);
-                setReviewIndex(0);
-                setSelectedAnswer(null);
-                setIsCorrect(null);
-                setHadWrong(null);
-                return;
-            }
-
-            // 重複を排除して復習する問題のIndex配列を作成
-            const queue = [...new Set(wrongIndices)];
-            setReviewQueue(queue);
-            setReviewIndex(0);
-            setSelectedAnswer(null);
-            setIsCorrect(null);
-            setHadWrong(null);
-            setStage(STAGE.REVIEW);
-        } else if (stage === STAGE.REVIEW) {
-            // レビューは一巡したら完了
-            if (reviewIndex + 1 < reviewQueue.length) {
-                setReviewIndex((i) => i + 1);
-                setSelectedAnswer(null);
-                setIsCorrect(null);
-                setHadWrong(null);
-            } else {
-                setStage(STAGE.COMPLETE);
-            }
-        } else if (stage === STAGE.COMPLETE) {
-            // 初期画面へ
-            setStage(STAGE.SETUP);
-            setQuestions([]);
-            setIndex(0);
-            setWrongIndices([]);
-            setReviewQueue([]);
-            setReviewIndex(0);
-            setSelectedAnswer(null);
-            setIsCorrect(null);
-            setHadWrong(null);
+    // 次の問題へ
+    function goToNextQuestion() {
+        if (index + 1 < questions.length) {
+            setIndex((i) => i + 1);
+            resetAnswerState();
+        } else {
+            setStage(STAGE.REVIEW_INTRO);
         }
     }
 
-    // Enterキーで次へ
+    // handleNext本体
+    function handleNext() {
+        if (stage === STAGE.QUIZ) {
+            const q = questions[index];
+            const key = q.intervalId ?? q.chordId;
+
+            updateStats(q, hadWrong);
+
+            if (hadWrong) {
+                setWrongIndices((w) => [...w, index]);
+            }
+
+            goToNextQuestion();
+            return;
+        }
+
+        if (stage === STAGE.REVIEW_INTRO) {
+            if (wrongIndices.length === 0) {
+                setStage(STAGE.SETUP);
+                resetState();
+                return;
+            }
+
+            const queue = [...new Set(wrongIndices)];
+            setReviewQueue(queue);
+            setReviewIndex(0);
+            resetAnswerState();
+            setStage(STAGE.REVIEW);
+            return;
+        }
+
+        if (stage === STAGE.REVIEW) {
+            if (reviewIndex + 1 < reviewQueue.length) {
+                setReviewIndex((i) => i + 1);
+                resetAnswerState();
+            } else {
+                setStage(STAGE.COMPLETE);
+            }
+            return;
+        }
+
+        if (stage === STAGE.COMPLETE) {
+            setStage(STAGE.SETUP);
+            resetState();
+        }
+    }
+
     useEffect(() => {
         function onKey(e) {
-            if (e.key === "Enter") {
-                e.preventDefault();
-                // 選択肢未選択のときは無効（クイズ/レビュー時）
-                if ((stage === STAGE.QUIZ || stage === STAGE.REVIEW) && selectedAnswer == null) return;
-                handleNext();
-            }
+            if (e.key !== "Enter") return;
+
+            e.preventDefault();
+
+            const isAnswerRequired =
+                stage === STAGE.QUIZ || stage === STAGE.REVIEW;
+
+            if (isAnswerRequired && selectedAnswer == null) return;
+
+            handleNext();
         }
+
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
-    }, [stage, selectedAnswer, isCorrect, index, reviewIndex, wrongIndices]);
+    }, [stage, selectedAnswer, handleNext]);
 
-    return (
-        <div>
-            <div className="w-full h-full">
 
-                {/* クイズ中はヘッダーを表示しない */}
-                {stage !== STAGE.QUIZ && stage !== STAGE.REVIEW && (
-                    <Header
-                        stage={stage}
-                        mode={mode}
-                        setStage={setStage}
-                        setMode={setMode}
-                    />
-                )}
-
-                    {stage === STAGE.SETUP && mode == null && (
-                        <ModeSelect onSelect={setMode} />
-                    )}
-                    {stage === STAGE.SETUP && mode === MODE.INTERVAL && (
+    const renderContent = () => {
+        switch (stage) {
+            case STAGE.SETUP:
+                if (mode == null) {
+                    return <ModeSelect onSelect={setMode} />;
+                }
+                if (mode === MODE.INTERVAL) {
+                    return (
                         <Setup
                             selectedIds={selectedIds}
                             onToggle={handleToggleInterval}
@@ -410,8 +462,10 @@ export default function IntervalTrainer() {
                             playMode={playMode}
                             setPlayMode={setPlayMode}
                         />
-                    )}
-                    {stage === STAGE.SETUP && mode === MODE.CHORD && (
+                    );
+                }
+                if (mode === MODE.CHORD) {
+                    return (
                         <ChordSetup
                             selectedIds={selectedIds}
                             onToggle={handleToggleInterval}
@@ -421,8 +475,24 @@ export default function IntervalTrainer() {
                             selectedInversions={selectedInversions}
                             onToggleInversion={handleToggleInversion}
                         />
-                    )}
-                    {stage === STAGE.QUIZ && (
+                    );
+                }
+                if (mode === MODE.RESONANCE) {
+                    return (
+                        <ResonanceSetup
+                            selectedIds={selectedIds}
+                            onToggle={handleToggleInterval}
+                            total={total}
+                            setTotal={setTotal}
+                            onStart={handleStart}
+                        />
+                    );
+                }
+                return null;
+
+            case STAGE.QUIZ:
+                if (mode === MODE.INTERVAL || mode === MODE.CHORD) {
+                    return (
                         <Quiz
                             question={currentQuestion}
                             index={index}
@@ -434,267 +504,82 @@ export default function IntervalTrainer() {
                             onNext={handleNext}
                             onClose={() => setShowExitPopup(true)}
                         />
-                    )}
-                    {stage === STAGE.REVIEW_INTRO && (
-                        <ReviewIntro count={wrongIndices.length} stats={stats} onNext={handleNext} />
-
-                    )}
-                    {stage === STAGE.REVIEW && (
-                        <Quiz
+                    );
+                }
+                if (mode === MODE.RESONANCE) {
+                    return (
+                        <ResonanceQuiz
                             question={currentQuestion}
-                            index={reviewIndex}
-                            total={reviewQueue.length}
-                            selected={selectedAnswer}
-                            setSelected={handleSelectChoice}
-                            isCorrect={isCorrect}
+                            sliderValue={sliderValue}
+                            setSliderValue={setSliderValue}
                             onReplay={playCurrent}
+                            onSubmit={handleAnswer}
                             onNext={handleNext}
-                            modeLabel="復習"
-                        onClose={() => setShowExitPopup(true)}
+                            isCorrect={isCorrect}
+                            index={index}
+                            total={questions.length}
+                            onClose={() => setShowExitPopup(true)}
                         />
-                    )}
-                    {stage === STAGE.COMPLETE && <Complete onNext={handleNext} />}
-                </div>
+                    );
+                }
+
+
+            case STAGE.REVIEW_INTRO:
+                return (
+                    <ReviewIntro
+                        count={wrongIndices.length}
+                        stats={stats}
+                        onNext={handleNext}
+                    />
+                );
+
+            case STAGE.REVIEW:
+                return (
+                    <Quiz
+                        question={currentQuestion}
+                        index={reviewIndex}
+                        total={reviewQueue.length}
+                        selected={selectedAnswer}
+                        setSelected={handleSelectChoice}
+                        isCorrect={isCorrect}
+                        onReplay={playCurrent}
+                        onNext={handleNext}
+                        modeLabel="復習"
+                        onClose={() => setShowExitPopup(true)}
+                    />
+                );
+
+            case STAGE.COMPLETE:
+                return <Complete onNext={handleNext} />;
+
+            default:
+                return null;
+        }
+    };
+
+    return (
+        <div>
+            <div className="w-full h-full">
+                {/* クイズ中はヘッダーを表示しない */}
+                {stage !== STAGE.QUIZ && stage !== STAGE.REVIEW && (
+                    <Header
+                        stage={stage}
+                        mode={mode}
+                        setStage={setStage}
+                        setMode={setMode}
+                    />
+                )}
+
+                {renderContent()}
+            </div>
+
             {showExitPopup && (
                 <ExitPopup
                     onCancel={() => setShowExitPopup(false)}
                     onConfirm={handleEndSession}
                 />
             )}
-            </div>
+        </div>
     );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// import { useEffect, useState } from "react";
-// import { MODE, STAGE, INTERVALS, CHORDS } from "./constants/music";
-
-// import { useAudio } from "./hooks/useAudio";
-// import { useQuizEngine } from "./hooks/useQuizEngine";
-// import { useQuestionGenerator } from "./hooks/useQuestionGenerator";
-// import { useStats } from "./hooks/useStats";
-// import { usePlayer } from "./hooks/usePlayer";
-
-// // Components
-// import { Header } from "./components/Header";
-// import { ExitPopup } from "./components/ExitPopup";
-// import { ModeSelect } from "./components/ModeSelect";
-// import { Complete } from "./components/Complete";
-// import { Setup } from "./components/Setup";
-// import { ReviewIntro } from "./components/ReviewIntro";
-// import { Quiz } from "./components/Quiz";
-// import { ChordSetup } from "./components/ChordSetup";
-
-// export default function IntervalTrainer() {
-//     const synth = useAudio();
-
-//     const quiz = useQuizEngine();
-//     const { generate } = useQuestionGenerator();
-//     const stats = useStats();
-
-//     const [mode, setMode] = useState(null);
-//     const [selectedIds, setSelectedIds] = useState(["M3", "m3"]);
-//     const [selectedInversions, setSelectedInversions] = useState(["root"]);
-//     const [total, setTotal] = useState(10);
-//     const [playMode, setPlayMode] = useState("harmonic");
-//     const [selectedAnswer, setSelectedAnswer] = useState(null);
-//     const [isCorrect, setIsCorrect] = useState(null);
-//     const [showExitPopup, setShowExitPopup] = useState(false);
-
-//     const player = usePlayer(mode, playMode, synth);
-
-//     const current = quiz.currentQuestion;
-
-//     useEffect(() => {
-//         if (current) player.play(current);
-//     }, [current]);
-
-//     function handleStart() {
-//         synth.ensure();
-
-//         const qs = generate({
-//             mode,
-//             total,
-//             selectedIds,
-//             selectedInversions,
-//         });
-
-//         quiz.setQuestions(qs);
-//         quiz.setStage(STAGE.QUIZ);
-
-//         const items =
-//             mode === MODE.INTERVAL
-//                 ? INTERVALS.filter(i => selectedIds.includes(i.id))
-//                 : CHORDS.filter(c => selectedIds.includes(c.id));
-
-//         stats.init(items);
-//     }
-
-//     function handleToggleInterval(id) {
-//         setSelectedIds(prev =>
-//             prev.includes(id)
-//                 ? prev.filter(x => x !== id)
-//                 : [...prev, id]
-//         );
-//     }
-
-//     function handleToggleInversion(id) {
-//         setSelectedInversions(prev =>
-//             prev.includes(id)
-//                 ? prev.filter(x => x !== id)
-//                 : [...prev, id]
-//         );
-//     }
-
-//     function handleSelectChoice(id) {
-//         if (!quiz.currentQuestion) return;
-//         setSelectedAnswer(id);
-//         const correctId = mode === MODE.INTERVAL
-//             ? quiz.currentQuestion.intervalId
-//             : quiz.currentQuestion.chordId;
-
-//         const ok = id === correctId;
-//         setIsCorrect(ok);
-
-//         if (ok) {
-//             setTimeout(() => synth.playSuccess(), 50);
-//         } else {
-//             setTimeout(() => synth.playError(), 50);
-//             setHadWrong(true); // 一度でも間違えたら記録
-//         }
-//     }
-
-//     function playCurrent() {
-//         if (!quiz.currentQuestion) return;
-
-//         if (mode === MODE.INTERVAL) {
-//             if (playMode === "harmonic") {
-//                 synth.playDyad(quiz.currentQuestion.rootHz, quiz.currentQuestion.semitones);
-//             } else {
-//                 synth.playMelodic(quiz.currentQuestion.rootHz, quiz.currentQuestion.semitones);
-//             }
-//         }
-
-//         if (mode === MODE.CHORD) {
-//             synth.playChord(quiz.currentQuestion.rootHz, quiz.currentQuestion.semitones);
-//         }
-//     }
-
-//     function handleEndSession() {
-//         setStage(STAGE.SETUP);
-//         setQuestions([]);
-//         setIndex(0);
-//         setWrongIndices([]);
-//         setReviewQueue([]);
-//         setReviewIndex(0);
-//         setSelectedAnswer(null);
-//         setIsCorrect(null);
-//         setHadWrong(null);
-//         setShowExitPopup(false);
-//     }
-
-//     return (
-//         <div>
-//             <div className="w-full h-full">
-
-//                 {/* クイズ中はヘッダーを表示しない */}
-//                 {quiz.stage !== STAGE.QUIZ && quiz.stage !== STAGE.REVIEW && (
-//                     <Header
-//                         stage={quiz.stage}
-//                         mode={mode}
-//                         setStage={quiz.setStage}
-//                         setMode={setMode}
-//                     />
-//                 )}
-
-//                 {quiz.stage === STAGE.SETUP && mode == null && (
-//                     <ModeSelect onSelect={setMode} />
-//                 )}
-//                 {quiz.stage === STAGE.SETUP && mode === MODE.INTERVAL && (
-//                     <Setup
-//                         selectedIds={selectedIds}
-//                         onToggle={handleToggleInterval}
-//                         total={total}
-//                         setTotal={setTotal}
-//                         onStart={handleStart}
-//                         playMode={playMode}
-//                         setPlayMode={setPlayMode}
-//                     />
-//                 )}
-//                 {quiz.stage === STAGE.SETUP && mode === MODE.CHORD && (
-//                     <ChordSetup
-//                         selectedIds={selectedIds}
-//                         onToggle={handleToggleInterval}
-//                         total={total}
-//                         setTotal={setTotal}
-//                         onStart={handleStart}
-//                         selectedInversions={selectedInversions}
-//                         onToggleInversion={handleToggleInversion}
-//                     />
-//                 )}
-//                 {quiz.stage === STAGE.QUIZ && (
-//                     <Quiz
-//                         question={quiz.currentQuestion}
-//                         index={quiz.index}
-//                         total={quiz.questions.length}
-//                         selected={selectedAnswer}
-//                         setSelected={handleSelectChoice}
-//                         isCorrect={isCorrect}
-//                         onReplay={playCurrent}
-//                         onNext={quiz.next}
-//                         onClose={() => setShowExitPopup(true)}
-//                     />
-//                 )}
-//                 {quiz.stage === STAGE.REVIEW_INTRO && (
-//                     <ReviewIntro count={wrongIndices.length} stats={stats} onNext={quiz.next} />
-
-//                 )}
-//                 {quiz.stage === STAGE.REVIEW && (
-//                     <Quiz
-//                         question={quiz.currentQuestion}
-//                         index={reviewIndex}
-//                         total={reviewQueue.length}
-//                         selected={selectedAnswer}
-//                         setSelected={handleSelectChoice}
-//                         isCorrect={isCorrect}
-//                         onReplay={playCurrent}
-//                         onNext={quiz.next}
-//                         modeLabel="復習"
-//                         onClose={() => setShowExitPopup(true)}
-//                     />
-//                 )}
-//                 {quiz.stage === STAGE.COMPLETE && <Complete onNext={quiz.next} />}
-//             </div>
-//             {showExitPopup && (
-//                 <ExitPopup
-//                     onCancel={() => setShowExitPopup(false)}
-//                     onConfirm={handleEndSession}
-//                 />
-//             )}
-//         </div>
-//     );
-// }
-
-
 

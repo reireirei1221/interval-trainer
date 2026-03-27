@@ -26,9 +26,20 @@ export const INVERSIONS = [
     { id: "2nd", label: "第2転回形" },
 ];
 
+export const RESONANCE_INTERVALS = [
+    { id: "m3", label: "短3度", semitones: 3 },
+    { id: "M3", label: "長3度", semitones: 4 },
+    { id: "P4", label: "完全4度", semitones: 5 },
+    { id: "P5", label: "完全5度", semitones: 7 },
+    { id: "m6", label: "短6度", semitones: 8 },
+    { id: "M6", label: "長6度", semitones: 9 },
+];
+
+
 export const MODE = {
     INTERVAL: "INTERVAL", // 2音
     CHORD: "CHORD", // 3音
+    RESONANCE: "RESONANCE", // 共鳴
 }
 
 export const STAGE = {

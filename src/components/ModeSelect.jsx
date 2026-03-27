@@ -13,6 +13,12 @@ const modes = [
         desc: "和音の種類を判別する",
         icon: "🎹"
     },
+    {
+        key: MODE.RESONANCE,
+        label: "共鳴",
+        desc: "音の共鳴を体験する",
+        icon: "🔊"
+    }
 ];
 
 export function ModeSelect({ onSelect }) {
