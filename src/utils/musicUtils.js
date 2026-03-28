@@ -1,7 +1,7 @@
 const SEMITONE = Math.pow(2, 1 / 12);
 
 function noteToHz(note) {
-    return 440 * Math.pow(SEMITONE, note - 69);
+    return 442 * Math.pow(SEMITONE, note - 69);
 }
 
 export function randomRootHz(maxSemitoneUp = 12) {
@@ -9,9 +9,9 @@ export function randomRootHz(maxSemitoneUp = 12) {
     const maxHz = 800;
 
     // Hz → MIDIノートに変換
-    const minNote = Math.ceil(69 + 12 * Math.log2(minHz / 440));
+    const minNote = Math.ceil(69 + 12 * Math.log2(minHz / 442));
     const maxNote = Math.floor(
-        69 + 12 * Math.log2((maxHz / Math.pow(SEMITONE, maxSemitoneUp)) / 440)
+        69 + 12 * Math.log2((maxHz / Math.pow(SEMITONE, maxSemitoneUp)) / 442)
     );
 
     // 離散的なノートを選ぶ

@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { STAGE } from "../constants/music";
+import { SlidersHorizontal } from "lucide-react";
+import { Music2 } from "lucide-react";
+
 
 export function Header({ stage, mode, setStage, setMode }) {
     const [open, setOpen] = useState(false);
@@ -66,17 +69,24 @@ export function Header({ stage, mode, setStage, setMode }) {
             rounded-2xl shadow-sm
         ">
             {/* Title */}
-            <div className="flex flex-col">
-                <h1 className="
-                    text-2xl font-semibold tracking-tight
-                    text-slate-800 flex items-center gap-2
+           <div className="flex items-center gap-3 cursor-pointer" onClick={goModeSelect}>
+                <div className="
+                    w-9 h-9 rounded-xl
+                    bg-gradient-to-br from-blue-500 to-indigo-600
+                    flex items-center justify-center
+                    text-white shadow
                 ">
-                    <span className="text-xl">🎵</span>
-                    相対音感トレーナー
-                </h1>
-                <p className="text-xs text-slate-500 mt-0.5 tracking-wide">
-                    Ear Training Tool
-                </p>
+                    <Music2 size={20} />
+                </div>
+
+                <div className="flex flex-col">
+                    <span className="text-lg font-bold text-slate-800 leading-tight">
+                        相対音感トレーナー
+                    </span>
+                    <span className="text-xs text-slate-500 tracking-wide">
+                        Ear Training Tool
+                    </span>
+                </div>
             </div>
 
             {/* Menu */}
@@ -85,33 +95,28 @@ export function Header({ stage, mode, setStage, setMode }) {
                     onClick={() => setOpen(o => !o)}
                     className="
                         p-2 rounded-xl
-                        hover:bg-slate-100 active:bg-slate-200
+                        bg-white/70 backdrop-blur
+                        border border-slate-200/60
+                        shadow-sm
+
+                        hover:bg-white
+                        hover:shadow-md
+                        active:scale-95
+
                         transition
                         flex items-center justify-center
                         group
                     "
                 >
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
+                    <SlidersHorizontal
                         className="
                             w-5 h-5 text-slate-600
                             transition-transform duration-300
-                            group-hover:rotate-45
-                            group-active:scale-90
+                            group-hover:rotate-12
                         "
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={1.5}
-                    >
-                        <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M10.325 4.317a1 1 0 011.35-.936l1.48.658a1 1 0 00.95 0l1.48-.658a1 1 0 011.35.936l.2 1.63a1 1 0 00.57.79l1.49.67a1 1 0 01.41 1.5l-.96 1.38a1 1 0 000 .94l.96 1.38a1 1 0 01-.41 1.5l-1.49.67a1 1 0 00-.57.79l-.2 1.63a1 1 0 01-1.35.936l-1.48-.658a1 1 0 00-.95 0l-1.48.658a1 1 0 01-1.35-.936l-.2-1.63a1 1 0 00-.57-.79l-1.49-.67a1 1 0 01-.41-1.5l.96-1.38a1 1 0 000-.94l-.96-1.38a1 1 0 01.41-1.5l1.49-.67a1 1 0 00.57-.79l.2-1.63z"
-                        />
-                        <circle cx="12" cy="12" r="3" />
-                    </svg>
+                    />
                 </button>
+
 
                 {open && (
                     <div className="

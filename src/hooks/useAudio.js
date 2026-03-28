@@ -27,7 +27,7 @@ export function useAudio() {
     // =========================
     // 共通：ワンショット音
     // =========================
-    function playOsc(freq, duration) {
+    function playOsc(freq, duration=2) {
         const ctx = getCtx();
 
         const startTime = ctx.currentTime;
@@ -85,26 +85,63 @@ export function useAudio() {
         stopResonance();
 
         const ctx = getCtx();
+        const now = ctx.currentTime;
 
-        const osc1 = ctx.createOscillator();
-        const osc2 = ctx.createOscillator();
         const gain = ctx.createGain();
-
-        osc1.frequency.value = rootHz;
-        osc2.frequency.value = rootHz * Math.pow(2, semitones / 12);
-
-        gain.gain.value = 0.2;
-
-        osc1.connect(gain);
-        osc2.connect(gain);
         gain.connect(ctx.destination);
 
-        osc1.start();
-        osc1.stop(ctx.currentTime + 0.6);
+        // ===== 周波数 =====
+        const freq1 = rootHz;
+        const freq2 = rootHz * Math.pow(2, semitones / 12);
 
-        osc2.start(ctx.currentTime + 0.7);
-        osc2.stop(ctx.currentTime + 1.3);
+        // ===== 1音目 =====
+        const osc1 = ctx.createOscillator();
+        const osc1Harm = ctx.createOscillator();
+
+        osc1.type = "triangle";
+        osc1.frequency.value = freq1;
+
+        osc1Harm.type = "sine";
+        osc1Harm.frequency.value = freq1 * 2;
+
+        // ===== 2音目 =====
+        const osc2 = ctx.createOscillator();
+        const osc2Harm = ctx.createOscillator();
+
+        osc2.type = "triangle";
+        osc2.frequency.value = freq2;
+
+        osc2Harm.type = "sine";
+        osc2Harm.frequency.value = freq2 * 2;
+
+        // 接続
+        osc1.connect(gain);
+        osc1Harm.connect(gain);
+        osc2.connect(gain);
+        osc2Harm.connect(gain);
+
+        // ===== エンベロープ（playOscと同じ）=====
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.25, now + 0.01);
+
+        const stopTime = now + 5;
+        gain.gain.exponentialRampToValueAtTime(0.001, stopTime);
+
+        // ===== 再生タイミング =====
+        osc1.start(now);
+        osc1Harm.start(now);
+
+        osc2.start(now + 0.3);
+        osc2Harm.start(now + 0.3);
+
+        // 🔥 同時停止
+        osc1.stop(stopTime + 0.05);
+        osc1Harm.stop(stopTime + 0.05);
+        osc2.stop(stopTime + 0.05);
+        osc2Harm.stop(stopTime + 0.05);
     }
+
+
 
     // =========================
     // 和音
@@ -121,7 +158,7 @@ export function useAudio() {
     // 🔥 共鳴（ここがメイン）
     // =========================
 
-    function startResonance(rootHz, semitones, cents) {
+    function startResonance(rootHz, semitones, ratio, cents) {
         stopResonance();
 
         const ctx = getCtx();
@@ -144,8 +181,12 @@ export function useAudio() {
         const osc2Harm = ctx.createOscillator();
 
         osc2.type = "triangle";
-        osc2.frequency.value =
-            rootHz * Math.pow(2, semitones / 12) * Math.pow(2, cents / 1200);
+        // osc2.frequency.value =
+        //     rootHz * Math.pow(2, semitones / 12) * Math.pow(2, cents / 1200);
+        
+        // 純正律での周波数を計算
+        osc2.frequency.value = rootHz * ratio * Math.pow(2, cents / 1200);
+
 
         osc2Harm.type = "sine";
         osc2Harm.frequency.value = osc2.frequency.value * 2;
@@ -212,10 +253,10 @@ export function useAudio() {
     // =========================
     // 旧API互換（重要）
     // =========================
-    function playDetunedInterval(rootHz, semitones, cents) {
+    function playDetunedInterval(rootHz, semitones, ratio, cents) {
         // 初回だけ start
         if (!resonanceRef.current.osc1) {
-            startResonance(rootHz, semitones, cents);
+            startResonance(rootHz, semitones, ratio, cents);
         }
 
         updateDetune(cents);
@@ -225,12 +266,82 @@ export function useAudio() {
     // 効果音
     // =========================
     function playSuccess() {
-        playOsc(880, 0.2);
+        const ctx = getCtx();
+        const now = ctx.currentTime;
+
+        const gain = ctx.createGain();
+        gain.connect(ctx.destination);
+
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.3, now + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+
+        // ドレミ（上昇アルペジオ）
+        const freqs = [523.25, 659.25, 783.99]; // C E G
+
+        freqs.forEach((f, i) => {
+            const osc = ctx.createOscillator();
+            osc.type = "triangle";
+            osc.frequency.setValueAtTime(f, now + i * 0.08);
+
+            osc.connect(gain);
+            osc.start(now + i * 0.08);
+            osc.stop(now + 0.7);
+        });
+
+        // キラキラ倍音
+        const sparkle = ctx.createOscillator();
+        sparkle.type = "sine";
+        sparkle.frequency.setValueAtTime(1200, now);
+        sparkle.frequency.exponentialRampToValueAtTime(2000, now + 0.3);
+
+        sparkle.connect(gain);
+        sparkle.start(now);
+        sparkle.stop(now + 0.5);
     }
 
+
     function playError() {
-        playOsc(220, 0.3);
+        const ctx = getCtx();
+        const now = ctx.currentTime;
+
+        const gain = ctx.createGain();
+        gain.connect(ctx.destination);
+
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.3, now + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+
+        // 下降音
+        const osc = ctx.createOscillator();
+        osc.type = "sawtooth";
+
+        osc.frequency.setValueAtTime(400, now);
+        osc.frequency.exponentialRampToValueAtTime(120, now + 0.4);
+
+        osc.connect(gain);
+        osc.start(now);
+        osc.stop(now + 0.5);
+
+        // 軽いノイズで「ザッ」
+        const buffer = ctx.createBuffer(1, ctx.sampleRate * 0.2, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+
+        for (let i = 0; i < data.length; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+
+        const noiseGain = ctx.createGain();
+        noiseGain.gain.setValueAtTime(0.1, now);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+
+        noise.connect(noiseGain).connect(ctx.destination);
+        noise.start(now);
     }
+
 
     return {
         ensure,

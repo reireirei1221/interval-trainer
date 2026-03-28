@@ -1,35 +1,71 @@
 import { INTERVALS } from "../constants/music";
 
-// 数値入力の制限ロジックを切り出し
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
-// インターバル選択コンポーネント
-function IntervalSelector({ selectedIds, onToggle }) {
+/* 共通カード */
+function Card({ children }) {
     return (
-        <section>
-            <h2 className="font-semibold mb-2">
-                出題するインターバルを選択 (2個以上)
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {INTERVALS.map((it) => (
-                    <label
-                        key={it.id}
-                        className="flex items-center gap-2 p-3 border rounded-xl hover:bg-slate-50"
-                    >
-                        <input
-                            type="checkbox"
-                            checked={selectedIds.includes(it.id)}
-                            onChange={() => onToggle(it.id)}
-                        />
-                        <span>{it.label}</span>
-                    </label>
-                ))}
-            </div>
-        </section>
+        <div className="
+            bg-white
+            border border-slate-200
+            rounded-2xl
+            p-6
+            shadow-sm
+        ">
+            {children}
+        </div>
     );
 }
 
-// 出題数入力
+/* セクションタイトル */
+function SectionTitle({ children }) {
+    return (
+        <h2 className="text-base font-semibold text-slate-800 mb-3">
+            {children}
+        </h2>
+    );
+}
+
+/* インターバル選択 */
+function IntervalSelector({ selectedIds, onToggle }) {
+    return (
+        <Card>
+            <SectionTitle>
+                出題するインターバル（2個以上）
+            </SectionTitle>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {INTERVALS.map((it) => {
+                    const active = selectedIds.includes(it.id);
+
+                    return (
+                        <button
+                            key={it.id}
+                            onClick={() => onToggle(it.id)}
+                            className={`
+                                text-left
+                                p-4
+                                rounded-xl
+                                border
+                                transition
+                                ${active
+                                    ? "bg-indigo-50 border-indigo-400"
+                                    : "bg-white border-slate-200 hover:bg-slate-50"
+                                }
+                            `}
+                        >
+                            <div className="font-medium text-slate-800">
+                                {it.label}
+                            </div>
+                        </button>
+                    );
+                })}
+            </div>
+        </Card>
+    );
+}
+
+/* 出題数 */
 function QuestionCount({ total, setTotal }) {
     const handleChange = (e) => {
         const value = Number(e.target.value) || 1;
@@ -37,22 +73,35 @@ function QuestionCount({ total, setTotal }) {
     };
 
     return (
-        <section className="flex items-center gap-3">
-            <label className="font-semibold">出題数</label>
-            <input
-                type="number"
-                min={1}
-                max={100}
-                value={total}
-                onChange={handleChange}
-                className="w-24 rounded-xl border px-3 py-2"
-            />
-            <span className="text-slate-500 text-sm">問 (1〜100)</span>
-        </section>
+        <Card>
+            <SectionTitle>出題数（1〜100）</SectionTitle>
+
+            <div className="flex items-center gap-3">
+                <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={total}
+                    onChange={handleChange}
+                    className="
+                        w-28
+                        rounded-xl
+                        border border-slate-200
+                        px-3 py-2
+                        text-center
+                        focus:outline-none
+                        focus:ring-2 focus:ring-indigo-200
+                    "
+                />
+                <span className="text-sm text-slate-500">
+                    問
+                </span>
+            </div>
+        </Card>
     );
 }
 
-// 再生モード選択
+/* 再生モード */
 function PlayModeSelector({ playMode, setPlayMode }) {
     const modes = [
         { value: "harmonic", label: "同時再生" },
@@ -60,27 +109,34 @@ function PlayModeSelector({ playMode, setPlayMode }) {
     ];
 
     return (
-        <section>
-            <h2 className="font-semibold mb-2">再生モード</h2>
-            <div className="flex gap-3">
-                {modes.map((mode) => (
-                    <label key={mode.value} className="flex items-center gap-2">
-                        <input
-                            type="radio"
-                            name="mode"
-                            value={mode.value}
-                            checked={playMode === mode.value}
-                            onChange={() => setPlayMode(mode.value)}
-                        />
-                        {mode.label}
-                    </label>
-                ))}
+        <Card>
+            <SectionTitle>再生モード</SectionTitle>
+
+            <div className="flex gap-3 flex-wrap">
+                {modes.map((mode) => {
+                    const active = playMode === mode.value;
+
+                    return (
+                        <button
+                            key={mode.value}
+                            onClick={() => setPlayMode(mode.value)}
+                            className={`
+                                px-4 py-2 rounded-xl border transition
+                                ${active
+                                    ? "bg-indigo-600 text-white border-indigo-600"
+                                    : "bg-white border-slate-200 hover:bg-slate-50"
+                                }
+                            `}
+                        >
+                            {mode.label}
+                        </button>
+                    );
+                })}
             </div>
-        </section>
+        </Card>
     );
 }
 
-// メインコンポーネント
 export function Setup({
     selectedIds,
     onToggle,
@@ -93,31 +149,66 @@ export function Setup({
     const isStartDisabled = selectedIds.length <= 1;
 
     return (
-        <div className="space-y-6">
-            <IntervalSelector
-                selectedIds={selectedIds}
-                onToggle={onToggle}
-            />
+        <div className="max-w-5xl mx-auto space-y-6">
+            {/* タイトル */}
+            <div className="text-center">
+                <h2 className="text-2xl font-semibold text-slate-800">
+                    トレーニング設定
+                </h2>
+                <p className="text-sm text-slate-500 mt-1">
+                    条件を選んでスタートしてください
+                </p>
+            </div>
 
-            <QuestionCount
-                total={total}
-                setTotal={setTotal}
-            />
+            {/* 2カラム */}
+            <div className="grid md:grid-cols-2 gap-6 items-stretch">
+                
+                {/* 左 */}
+                <IntervalSelector
+                    selectedIds={selectedIds}
+                    onToggle={onToggle}
+                />
 
-            <PlayModeSelector
-                playMode={playMode}
-                setPlayMode={setPlayMode}
-            />
+                {/* 右 */}
+                <div className="flex flex-col h-full">
+                    <div className="space-y-6">
+                        <QuestionCount
+                            total={total}
+                            setTotal={setTotal}
+                        />
 
-            <div className="flex justify-end">
-                <button
-                    onClick={onStart}
-                    disabled={isStartDisabled}
-                    className="px-5 py-3 rounded-2xl bg-indigo-600 text-white font-semibold disabled:opacity-40"
-                >
-                    スタート
-                </button>
+                        <PlayModeSelector
+                            playMode={playMode}
+                            setPlayMode={setPlayMode}
+                        />
+                    </div>
+
+                    {/* 右下ボタン */}
+                    <div className="mt-auto flex justify-end pt-6">
+                        <button
+                            onClick={onStart}
+                            disabled={isStartDisabled}
+                            className="
+                                px-6
+                                py-2.5
+                                rounded-xl
+                                bg-indigo-600
+                                text-white
+                                font-bold
+                                text-sm
+                                shadow-sm
+                                hover:bg-indigo-700
+                                transition
+                                disabled:opacity-40
+                                disabled:cursor-not-allowed
+                            "
+                        >
+                            START
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     );
 }
+

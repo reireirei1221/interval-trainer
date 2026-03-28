@@ -132,10 +132,15 @@ export default function IntervalTrainer() {
             synth.playDetunedInterval(
                 currentQuestion.rootHz,
                 currentQuestion.semitones,
+                currentQuestion.ratio,
                 currentQuestion.targetDetune + sliderValue
             );
             return;
         }
+    }
+
+    function handlePause() {
+        synth.stopResonance();
     }
 
     function handleAnswer() {
@@ -143,7 +148,7 @@ export default function IntervalTrainer() {
 
         console.log("Error:", error);
 
-        const ok = error < 5; // 5セント以内なら正解
+        const ok = error < 2; // 2セント以内なら正解
 
         setIsCorrect(ok);
 
@@ -265,7 +270,7 @@ export default function IntervalTrainer() {
         },
 
         [MODE.RESONANCE]: {
-            getItems: () => allowed,
+            getItems: () => allowedResonance,
             validate: (items) => items.length >= 1,
 
             createQuestion: (item, context) => ({
@@ -273,6 +278,7 @@ export default function IntervalTrainer() {
                 intervalId: item.id,
                 label: item.label,
                 semitones: item.semitones,
+                ratio: item.ratio,
                 choices: context.items.map(i => ({ id: i.id, label: i.label })),
 
                 // 👇 これが本質
@@ -513,6 +519,7 @@ export default function IntervalTrainer() {
                             sliderValue={sliderValue}
                             setSliderValue={setSliderValue}
                             onReplay={playCurrent}
+                            onPause={handlePause}
                             onSubmit={handleAnswer}
                             onNext={handleNext}
                             isCorrect={isCorrect}
@@ -534,20 +541,65 @@ export default function IntervalTrainer() {
                 );
 
             case STAGE.REVIEW:
+                if (mode !== MODE.RESONANCE) {
+                    return (
+                        <Quiz
+                            question={currentQuestion}
+                            index={reviewIndex}
+                            total={reviewQueue.length}
+                            selected={selectedAnswer}
+                            setSelected={handleSelectChoice}
+                            isCorrect={isCorrect}
+                            onReplay={playCurrent}
+                            onNext={handleNext}
+                            modeLabel="復習"
+                            onClose={() => setShowExitPopup(true)}
+                        />
+                    );
+                }
+                if (mode === MODE.RESONANCE) {
+                    return (
+                        <ResonanceQuiz
+                            question={currentQuestion}
+                            index={reviewIndex}
+                            total={reviewQueue.length}
+                            sliderValue={sliderValue}
+                            setSliderValue={setSliderValue}
+                            onReplay={playCurrent}
+                            onSubmit={handleAnswer}
+                            onNext={handleNext}
+                            isCorrect={isCorrect}
+                            onClose={() => setShowExitPopup(true)}
+                        />
+                    );
+                }
+
+            case STAGE.REVIEW_INTRO:
                 return (
-                    <Quiz
-                        question={currentQuestion}
-                        index={reviewIndex}
-                        total={reviewQueue.length}
-                        selected={selectedAnswer}
-                        setSelected={handleSelectChoice}
-                        isCorrect={isCorrect}
-                        onReplay={playCurrent}
+                    <ReviewIntro
+                        count={wrongIndices.length}
+                        stats={stats}
                         onNext={handleNext}
-                        modeLabel="復習"
-                        onClose={() => setShowExitPopup(true)}
                     />
                 );
+
+            case STAGE.REVIEW:
+                if (mode !== MODE.RESONANCE) {
+                    return (
+                        <Quiz
+                            question={currentQuestion}
+                            index={reviewIndex}
+                            total={reviewQueue.length}
+                            selected={selectedAnswer}
+                            setSelected={handleSelectChoice}
+                            isCorrect={isCorrect}
+                            onReplay={playCurrent}
+                            onNext={handleNext}
+                            modeLabel="復習"
+                            onClose={() => setShowExitPopup(true)}
+                        />
+                    );
+                }
 
             case STAGE.COMPLETE:
                 return <Complete onNext={handleNext} />;

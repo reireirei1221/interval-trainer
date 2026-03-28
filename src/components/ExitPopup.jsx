@@ -9,16 +9,16 @@ export function ExitPopup({ onCancel, onConfirm }) {
                 <div className="flex gap-3 justify-center">
                     <button
                         onClick={onCancel}
-                        className="px-4 py-2 rounded-xl border"
+                        className="px-4 py-2 rounded-xl border bg-emerald-500 text-white"
                     >
-                        Keep Learning
+                        継続する
                     </button>
 
                     <button
                         onClick={onConfirm}
                         className="px-4 py-2 rounded-xl bg-rose-500 text-white"
                     >
-                        End Session
+                        終了する
                     </button>
                 </div>
             </div>

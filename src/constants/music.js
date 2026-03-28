@@ -27,12 +27,12 @@ export const INVERSIONS = [
 ];
 
 export const RESONANCE_INTERVALS = [
-    { id: "m3", label: "短3度", semitones: 3 },
-    { id: "M3", label: "長3度", semitones: 4 },
-    { id: "P4", label: "完全4度", semitones: 5 },
-    { id: "P5", label: "完全5度", semitones: 7 },
-    { id: "m6", label: "短6度", semitones: 8 },
-    { id: "M6", label: "長6度", semitones: 9 },
+    { id: "m3", label: "短3度", semitones: 3, ratio: 6 / 5 },
+    { id: "M3", label: "長3度", semitones: 4, ratio: 5 / 4 },
+    { id: "P4", label: "完全4度", semitones: 5, ratio: 4 / 3 },
+    { id: "P5", label: "完全5度", semitones: 7, ratio: 3 / 2 },
+    { id: "m6", label: "短6度", semitones: 8, ratio: 8 / 5 },
+    { id: "M6", label: "長6度", semitones: 9, ratio: 5 / 3 },
 ];
 
 
