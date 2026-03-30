@@ -112,6 +112,15 @@ export default function IntervalTrainer() {
         playCurrent();
     }, [sliderValue, currentQuestion, mode]);
 
+    // モード変更時に選択肢をリセット
+    useEffect(() => {
+        if (mode !== null) {
+            setSelectedIds(["M3", "m3"]);
+            setSelectedInversions(["root"]);
+            setTotal(10);
+        }
+    }, [mode]);
+
     // 現在の問題の音源を再生する
     function playCurrent() {
         if (!currentQuestion) return;
@@ -457,6 +466,7 @@ export default function IntervalTrainer() {
                 if (mode == null) {
                     return <ModeSelect onSelect={setMode} />;
                 }
+
                 if (mode === MODE.INTERVAL) {
                     return (
                         <Setup
@@ -537,6 +547,7 @@ export default function IntervalTrainer() {
                         count={wrongIndices.length}
                         stats={stats}
                         onNext={handleNext}
+                        mode={mode}
                     />
                 );
 
@@ -551,6 +562,7 @@ export default function IntervalTrainer() {
                             setSelected={handleSelectChoice}
                             isCorrect={isCorrect}
                             onReplay={playCurrent}
+                            onPause={handlePause}
                             onNext={handleNext}
                             modeLabel="復習"
                             onClose={() => setShowExitPopup(true)}
@@ -566,6 +578,7 @@ export default function IntervalTrainer() {
                             sliderValue={sliderValue}
                             setSliderValue={setSliderValue}
                             onReplay={playCurrent}
+                            onPause={handlePause}
                             onSubmit={handleAnswer}
                             onNext={handleNext}
                             isCorrect={isCorrect}

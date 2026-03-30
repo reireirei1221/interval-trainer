@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Music, Layers, Radio } from "lucide-react";
 import { MODE } from "../constants/music";
 
@@ -26,8 +27,27 @@ const modes = [
 ];
 
 export function ModeSelect({ onSelect }) {
+    const [isLeaving, setIsLeaving] = useState(false);
+
+    const handleSelect = (key) => {
+        setIsLeaving(true);
+
+        setTimeout(() => {
+            onSelect(key);
+        }, 300);
+    };
+
     return (
-        <div className="space-y-8 text-center">
+        <div
+            className={`
+                space-y-8 text-center
+                transition-all duration-300
+                ${isLeaving
+                    ? "opacity-0 scale-95"
+                    : "opacity-100 scale-100"
+                }
+            `}
+        >
             <div>
                 <h2 className="text-2xl font-semibold text-slate-800">
                     分野別・集中トレーニング
@@ -44,7 +64,7 @@ export function ModeSelect({ onSelect }) {
                     return (
                         <button
                             key={mode.key}
-                            onClick={() => onSelect(mode.key)}
+                            onClick={() => handleSelect(mode.key)}
                             className="
                                 group w-56 p-6 rounded-2xl
                                 bg-white border border-slate-200

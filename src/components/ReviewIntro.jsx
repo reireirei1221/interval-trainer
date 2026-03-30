@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { INTERVALS } from "../constants/music";
 
 /* 共通UI（Setupと揃える） */
@@ -50,8 +51,7 @@ function IntervalStatItem({ id, total, wrong }) {
                 </span>
             </div>
 
-            {/* progress bar */}
-            <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+            <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden">
                 <div
                     className="h-full bg-indigo-500 transition-all"
                     style={{ width: `${rate}%` }}
@@ -62,32 +62,47 @@ function IntervalStatItem({ id, total, wrong }) {
 }
 
 // --- main component ---
-export function ReviewIntro({ count, stats, onNext }) {
+export function ReviewIntro({ count, stats, onNext, mode }) {
+    const [isLeaving, setIsLeaving] = useState(false);
+
     const allCorrect = count === 0;
 
-    return (
-        <div className="max-w-5xl mx-auto space-y-6">
+    const handleNext = () => {
+        setIsLeaving(true);
 
+        setTimeout(() => {
+            onNext();
+        }, 300);
+    };
+
+    return (
+        <div
+            className={`
+                max-w-4xl mx-auto space-y-6
+                transition-all duration-300
+                ${isLeaving
+                    ? "opacity-0 scale-95"
+                    : "opacity-100 scale-100"
+                }
+            `}
+        >
             {/* タイトル */}
             <div className="text-center">
                 <h2 className="text-2xl font-semibold text-slate-800">
                     結果
                 </h2>
-                <p className="text-sm text-slate-500 mt-1">
-                    トレーニングの結果です
-                </p>
             </div>
 
             {/* 結果メッセージ */}
             <ResultMessage allCorrect={allCorrect} count={count} />
 
             {/* 統計 */}
-            <StatsSection stats={stats} />
+            <StatsSection stats={stats} mode={mode} />
 
             {/* ボタン */}
             <div className="flex justify-end">
                 <button
-                    onClick={onNext}
+                    onClick={handleNext}
                     className="
                         px-6
                         py-2.5
@@ -98,6 +113,7 @@ export function ReviewIntro({ count, stats, onNext }) {
                         text-sm
                         shadow-sm
                         hover:bg-indigo-700
+                        active:scale-95
                         transition
                     "
                 >
@@ -130,9 +146,7 @@ function ResultMessage({ allCorrect, count }) {
             <div className="text-slate-700">
                 <p>
                     間違えた問題は{" "}
-                    <span className="text-lg font-semibold">
-                        {count}
-                    </span>{" "}
+                    <span className="text-lg font-semibold"> {count} </span>{" "}
                     問でした
                 </p>
             </div>
@@ -140,21 +154,15 @@ function ResultMessage({ allCorrect, count }) {
     );
 }
 
-function StatsSection({ stats }) {
+function StatsSection({ stats, mode }) {
+    const title = mode === "CHORD" ? "コード別成績" : "インターバル別成績";
+
     return (
         <Card>
-            <SectionTitle>
-                インターバル別成績
-            </SectionTitle>
-
+            <SectionTitle> {title} </SectionTitle>
             <div className="space-y-3">
                 {Object.entries(stats).map(([id, s]) => (
-                    <IntervalStatItem
-                        key={id}
-                        id={id}
-                        total={s.total}
-                        wrong={s.wrong}
-                    />
+                    <IntervalStatItem key={id} id={id} total={s.total} wrong={s.wrong} />
                 ))}
             </div>
         </Card>

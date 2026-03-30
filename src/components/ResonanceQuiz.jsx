@@ -12,22 +12,25 @@ export function ResonanceQuiz({
     total,
     onClose,
 }) {
-    if (!question) return null;
+    /* ----------------- Hooks（必ず最上部） ----------------- */
 
     const [isPlaying, setIsPlaying] = useState(true);
     const [submitted, setSubmitted] = useState(false);
 
     useEffect(() => {
+        setIsPlaying(true);
         setSubmitted(false);
     }, [question]);
 
-    const error = Math.abs((question.targetDetune ?? 0) + sliderValue);
+    /* ----------------- Derived State ----------------- */
+
+    const error = Math.abs((question?.targetDetune ?? 0) + sliderValue);
 
     const feedbackState = !submitted
         ? "idle"
         : error < 2
-            ? "correct"
-            : "wrong";
+        ? "correct"
+        : "wrong";
 
     const feedbackText = useMemo(() => {
         if (!submitted) return "";
@@ -36,6 +39,10 @@ export function ResonanceQuiz({
         if (error < 10) return "○ 近い";
         return "× まだズレている";
     }, [submitted, error]);
+
+    const canNext = submitted;
+
+    /* ----------------- Handlers ----------------- */
 
     function handlePlayToggle() {
         setIsPlaying((prev) => {
@@ -50,18 +57,23 @@ export function ResonanceQuiz({
         onSubmit?.();
     }
 
-    const canNext = submitted;
+    /* ----------------- Guard（Hooksの後） ----------------- */
+
+    if (!question) return null;
+
+    /* ----------------- UI ----------------- */
+
+
 
     return (
         <div className="h-screen flex flex-col bg-white overflow-hidden">
-
             <ProgressBar
                 index={index}
                 total={total}
                 onClose={onClose}
             />
 
-            <QuestionHeader />
+            <QuestionHeader label={question.label} />
 
             <ReplayButton
                 isPlaying={isPlaying}
@@ -89,11 +101,12 @@ export function ResonanceQuiz({
 
 /* ----------------- Header ----------------- */
 
-function QuestionHeader() {
+function QuestionHeader({ label }) {
+    console.log(label);
     return (
         <div className="flex flex-col items-center justify-center pt-6 pb-4 px-6">
             <h1 className="text-3xl font-extrabold text-center leading-snug">
-                共鳴する位置に合わせてください
+                スライダーを共鳴する位置に合わせてください ({label})
             </h1>
         </div>
     );
@@ -114,6 +127,7 @@ function ReplayButton({ isPlaying, onToggle }) {
                     shadow-sm
                     hover:bg-indigo-100 active:scale-95
                     transition
+                    text-3xl
                 "
             >
                 {isPlaying ? "⏸" : "▶"}
@@ -128,7 +142,6 @@ function SliderSection({ sliderValue, setSliderValue, min, max }) {
     return (
         <div className="px-6 mt-4 w-full">
             <div className="max-w-2xl mx-auto flex flex-col gap-6">
-
                 <input
                     type="range"
                     min={min}
@@ -139,10 +152,9 @@ function SliderSection({ sliderValue, setSliderValue, min, max }) {
                     className="w-full"
                 />
 
-                <div className="text-center text-gray-500 text-sm">
+                {/* <div className="text-center text-gray-500 text-sm">
                     {sliderValue.toFixed(1)} cents
-                </div>
-
+                </div> */}
             </div>
         </div>
     );
@@ -156,19 +168,18 @@ function Footer({
     canNext,
     onSubmit,
     onNext,
-    submitted
+    submitted,
 }) {
     const bgClass = {
         idle: "bg-white border-gray-200",
         correct: "bg-emerald-400 border-emerald-400",
-        wrong: "bg-rose-400 border-rose-400"
+        wrong: "bg-rose-400 border-rose-400",
     }[state];
 
     return (
         <div className={`fixed bottom-0 left-0 right-0 h-36 border-t ${bgClass}`}>
             <div className="max-w-3xl mx-auto h-full px-8 flex items-center justify-between">
-
-                <div className="font-bold text-lg text-white">
+                <div className="font-bold text-xl text-white">
                     {text}
                 </div>
 
@@ -198,10 +209,9 @@ function Footer({
                             disabled:opacity-40
                         "
                     >
-                        CONTINUE
+                        次へ
                     </button>
                 )}
-
             </div>
         </div>
     );
@@ -215,7 +225,6 @@ function ProgressBar({ index, total, onClose }) {
     return (
         <div className="px-6 pt-6 pb-2 mt-4">
             <div className="flex items-center justify-center gap-3">
-
                 <button
                     onClick={onClose}
                     className="
@@ -224,8 +233,9 @@ function ProgressBar({ index, total, onClose }) {
                         hover:bg-gray-100 active:scale-95
                         transition
                     "
+                    aria-label="閉じる"
                 >
-                    ×
+                    <CloseIcon />
                 </button>
 
                 <div className="w-2/3 h-4 bg-gray-200 rounded-full overflow-hidden">
@@ -234,8 +244,28 @@ function ProgressBar({ index, total, onClose }) {
                         style={{ width: `${pct}%` }}
                     />
                 </div>
-
             </div>
         </div>
+    );
+}
+
+/* ----------------- Icon ----------------- */
+
+function CloseIcon() {
+    return (
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            className="w-6 h-6"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+        >
+            <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M6 6l12 12M6 18L18 6"
+            />
+        </svg>
     );
 }

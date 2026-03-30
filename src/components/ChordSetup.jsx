@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { CHORDS, INVERSIONS } from "../constants/music";
 
 const clamp = (value, min, max) =>
@@ -161,12 +162,34 @@ export function ChordSetup({
     selectedInversions,
     onToggleInversion,
 }) {
+    const [isLeaving, setIsLeaving] = useState(false);
+
     const isStartDisabled =
         selectedIds.length <= 1 ||
         selectedInversions.length === 0;
 
+    const handleStart = () => {
+        if (isStartDisabled) return;
+
+        setIsLeaving(true);
+
+        setTimeout(() => {
+            onStart();
+        }, 300);
+    };
+
     return (
-        <div className="max-w-5xl mx-auto space-y-6">
+        <div
+            className={`
+                max-w-5xl mx-auto space-y-6
+                transition-all duration-300
+                ${
+                    isLeaving
+                        ? "opacity-0 scale-95"
+                        : "opacity-100 scale-100"
+                }
+            `}
+        >
             {/* タイトル */}
             <div className="text-center">
                 <h2 className="text-2xl font-semibold text-slate-800">
@@ -178,7 +201,7 @@ export function ChordSetup({
             </div>
 
             <div className="grid md:grid-cols-2 gap-6 items-start">
-                {/* 左カラム：和音 → 転回形 */}
+                {/* 左 */}
                 <div className="space-y-6">
                     <ChordSelector
                         selectedIds={selectedIds}
@@ -191,17 +214,16 @@ export function ChordSetup({
                     />
                 </div>
 
-                {/* 右カラム：出題数（上）＋ボタン（下） */}
+                {/* 右 */}
                 <div className="flex flex-col h-full">
                     <QuestionCount
                         total={total}
                         setTotal={setTotal}
                     />
 
-                    {/* 下に押し出す */}
-                    <div className="mt-auto flex justify-end">
+                    <div className="mt-auto flex justify-end pt-6">
                         <button
-                            onClick={onStart}
+                            onClick={handleStart}
                             disabled={isStartDisabled}
                             className="
                                 px-6
@@ -213,6 +235,7 @@ export function ChordSetup({
                                 text-sm
                                 shadow-sm
                                 hover:bg-indigo-700
+                                active:scale-95
                                 transition
                                 disabled:opacity-40
                                 disabled:cursor-not-allowed

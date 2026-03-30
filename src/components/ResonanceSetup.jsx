@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { RESONANCE_INTERVALS } from "../constants/music";
 
 const clamp = (value, min, max) =>
@@ -113,10 +114,32 @@ export function ResonanceSetup({
     setTotal,
     onStart,
 }) {
+    const [isLeaving, setIsLeaving] = useState(false);
+
     const isStartDisabled = selectedIds.length <= 0;
 
+    const handleStart = () => {
+        if (isStartDisabled) return;
+
+        setIsLeaving(true);
+
+        setTimeout(() => {
+            onStart();
+        }, 300); // アニメーション時間
+    };
+
     return (
-        <div className="max-w-5xl mx-auto space-y-6">
+        <div
+            className={`
+                max-w-5xl mx-auto space-y-6
+                transition-all duration-300
+                ${
+                    isLeaving
+                        ? "opacity-0 scale-95"
+                        : "opacity-100 scale-100"
+                }
+            `}
+        >
             {/* タイトル */}
             <div className="text-center">
                 <h2 className="text-2xl font-semibold text-slate-800">
@@ -141,10 +164,10 @@ export function ResonanceSetup({
                         setTotal={setTotal}
                     />
 
-                    {/* ⭐ 下に押し出す */}
-                    <div className="mt-auto flex justify-end">
+                    {/* ボタン */}
+                    <div className="mt-auto flex justify-end pt-6">
                         <button
-                            onClick={onStart}
+                            onClick={handleStart}
                             disabled={isStartDisabled}
                             className="
                                 px-6
@@ -156,6 +179,7 @@ export function ResonanceSetup({
                                 text-sm
                                 shadow-sm
                                 hover:bg-indigo-700
+                                active:scale-95
                                 transition
                                 disabled:opacity-40
                                 disabled:cursor-not-allowed

@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 export function Quiz({
     question,
     index,
@@ -10,6 +12,8 @@ export function Quiz({
     modeLabel,
     onClose
 }) {
+    const [isLeaving, setIsLeaving] = useState(false);
+
     if (!question) return null;
 
     const hasAnswered = selected != null;
@@ -21,9 +25,28 @@ export function Quiz({
             ? "correct"
             : "wrong";
 
-    return (
-        <div className="h-screen flex flex-col bg-white overflow-hidden">
+    /* 次へ（アニメーション付き） */
+    const handleNext = () => {
+        if (!canNext || isLeaving) return;
 
+        setIsLeaving(true);
+
+        setTimeout(() => {
+            onNext();
+            setIsLeaving(false); // 次の問題用に戻す
+        }, 300);
+    };
+
+    return (
+        <div
+            className={`
+                h-screen flex flex-col bg-white overflow-hidden
+                transition-all duration-300
+                ${isLeaving
+                    ? "opacity-0 scale-95"
+                    : "opacity-100 scale-100"}
+            `}
+        >
             <ProgressBar
                 index={index}
                 total={total}
@@ -34,17 +57,21 @@ export function Quiz({
 
             <ReplayButton onReplay={onReplay} />
 
-            <Choices
-                choices={question.choices}
-                selected={selected}
-                setSelected={setSelected}
-                disabled={isCorrect === true}
-            />
+            {/* スクロール領域 */}
+            <div className="flex-1 overflow-y-auto pb-40">
+                <Choices
+                    choices={question.choices}
+                    selected={selected}
+                    setSelected={setSelected}
+                    disabled={isCorrect === true}
+                />
+            </div>
 
             <Footer
                 state={feedbackState}
                 canNext={canNext}
-                onNext={onNext}
+                onNext={handleNext}
+                isLeaving={isLeaving}
             />
         </div>
     );
@@ -149,7 +176,7 @@ function ChoiceButton({ choice, isSelected, onClick, disabled }) {
 
 /* ----------------- Footer ----------------- */
 
-function Footer({ state, canNext, onNext }) {
+function Footer({ state, canNext, onNext, isLeaving }) {
     const bgClass = {
         idle: "bg-white border-gray-200",
         correct: "bg-emerald-400 border-emerald-400",
@@ -160,14 +187,14 @@ function Footer({ state, canNext, onNext }) {
         <div className={`fixed bottom-0 left-0 right-0 h-36 border-t ${bgClass}`}>
             <div className="max-w-3xl mx-auto h-full px-8 flex items-center justify-between">
                 
-                <div className="font-bold text-lg text-white">
+                <div className="font-bold text-2xl text-white">
                     {state === "correct" && "Great Job!"}
                     {state === "wrong" && "Wrong!"}
                 </div>
 
                 <button
                     onClick={onNext}
-                    disabled={!canNext}
+                    disabled={!canNext || isLeaving}
                     className="
                         px-6 py-3
                         rounded-full
@@ -177,7 +204,7 @@ function Footer({ state, canNext, onNext }) {
                         disabled:opacity-40
                     "
                 >
-                    CONTINUE
+                    次へ
                 </button>
 
             </div>
