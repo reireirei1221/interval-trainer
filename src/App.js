@@ -1,5 +1,5 @@
 // React
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 // Constants
 import { INTERVALS, CHORDS, INVERSIONS, RESONANCE_INTERVALS, MODE, STAGE } from "./constants/music";
@@ -398,7 +398,7 @@ export default function IntervalTrainer() {
     function handleNext() {
         if (stage === STAGE.QUIZ) {
             const q = questions[index];
-            const key = q.intervalId ?? q.chordId;
+            // const key = q.intervalId ?? q.chordId;
 
             updateStats(q, hadWrong);
 
@@ -539,6 +539,7 @@ export default function IntervalTrainer() {
                         />
                     );
                 }
+                break;
 
 
             case STAGE.REVIEW_INTRO:
@@ -586,33 +587,52 @@ export default function IntervalTrainer() {
                         />
                     );
                 }
+                break;
 
-            case STAGE.REVIEW_INTRO:
-                return (
-                    <ReviewIntro
-                        count={wrongIndices.length}
-                        stats={stats}
-                        onNext={handleNext}
-                    />
-                );
+            // case STAGE.REVIEW_INTRO:
+            //     return (
+            //         <ReviewIntro
+            //             count={wrongIndices.length}
+            //             stats={stats}
+            //             onNext={handleNext}
+            //         />
+            //     );
 
-            case STAGE.REVIEW:
-                if (mode !== MODE.RESONANCE) {
-                    return (
-                        <Quiz
-                            question={currentQuestion}
-                            index={reviewIndex}
-                            total={reviewQueue.length}
-                            selected={selectedAnswer}
-                            setSelected={handleSelectChoice}
-                            isCorrect={isCorrect}
-                            onReplay={playCurrent}
-                            onNext={handleNext}
-                            modeLabel="復習"
-                            onClose={() => setShowExitPopup(true)}
-                        />
-                    );
-                }
+            // case STAGE.REVIEW:
+            //     if (mode !== MODE.RESONANCE) {
+            //         return (
+            //             <Quiz
+            //                 question={currentQuestion}
+            //                 index={reviewIndex}
+            //                 total={reviewQueue.length}
+            //                 selected={selectedAnswer}
+            //                 setSelected={handleSelectChoice}
+            //                 isCorrect={isCorrect}
+            //                 onReplay={playCurrent}
+            //                 onNext={handleNext}
+            //                 modeLabel="復習"
+            //                 onClose={() => setShowExitPopup(true)}
+            //             />
+            //         );
+            //     }
+            //     if (mode === MODE.RESONANCE) {
+            //         return (
+            //             <ResonanceQuiz
+            //                 question={currentQuestion}
+            //                 index={reviewIndex}
+            //                 total={reviewQueue.length}
+            //                 sliderValue={sliderValue}
+            //                 setSliderValue={setSliderValue}
+            //                 onReplay={playCurrent}
+            //                 onPause={handlePause}
+            //                 onSubmit={handleAnswer}
+            //                 onNext={handleNext}
+            //                 isCorrect={isCorrect}
+            //                 onClose={() => setShowExitPopup(true)}
+            //             />
+            //         );
+            //     }
+            //     break;
 
             case STAGE.COMPLETE:
                 return <Complete onNext={handleNext} />;
