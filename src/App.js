@@ -1,5 +1,6 @@
 // React
 import React, { useEffect, useMemo, useState } from "react";
+import { useCallback } from "react";
 
 // Constants
 import { INTERVALS, CHORDS, INVERSIONS, RESONANCE_INTERVALS, MODE, STAGE } from "./constants/music";
@@ -72,6 +73,8 @@ export default function IntervalTrainer() {
     const [stats, setStats] = useState({}); // { [intervalId]: { total: number, wrong: number } }
 
     const [sliderValue, setSliderValue] = useState(0);
+
+    
     
     
 
@@ -88,41 +91,8 @@ export default function IntervalTrainer() {
         return null;
     }, [stage, index, reviewIndex, reviewQueue, questions]);
 
-    // 質問切替時の自動再生
-    useEffect(() => {
-
-        if (mode === MODE.RESONANCE) {
-            synth.stopResonance();
-            setSliderValue(0);
-        }
-
-        if (!currentQuestion) return;
-        // RESONANCEモードの時は、音を止める
-        
-        // 初回はstartボタンでユーザ操作済みのため再生可能
-        playCurrent();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentQuestion]);
-
-    // 👇 ここに追加する
-    useEffect(() => {
-        if (!currentQuestion) return;
-        if (mode !== MODE.RESONANCE) return;
-
-        playCurrent();
-    }, [sliderValue, currentQuestion, mode]);
-
-    // モード変更時に選択肢をリセット
-    useEffect(() => {
-        if (mode !== null) {
-            setSelectedIds(["M3", "m3"]);
-            setSelectedInversions(["root"]);
-            setTotal(10);
-        }
-    }, [mode]);
-
     // 現在の問題の音源を再生する
-    function playCurrent() {
+    const playCurrent = useCallback(() => {
         if (!currentQuestion) return;
 
         if (mode === MODE.INTERVAL) {
@@ -144,13 +114,48 @@ export default function IntervalTrainer() {
                 currentQuestion.ratio,
                 currentQuestion.targetDetune + sliderValue
             );
-            return;
         }
-    }
-
+    }, [currentQuestion, mode, playMode, sliderValue, synth]);
     function handlePause() {
         synth.stopResonance();
     }
+
+    // 質問切替時の自動再生
+    useEffect(() => {
+
+        if (mode === MODE.RESONANCE) {
+            synth.stopResonance();
+            setSliderValue(0);
+        }
+
+        if (!currentQuestion) return;
+        // RESONANCEモードの時は、音を止める
+
+        // 初回はstartボタンでユーザ操作済みのため再生可能
+        playCurrent();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentQuestion]);
+
+    // 👇 ここに追加する
+    useEffect(() => {
+        if (!currentQuestion) return;
+        if (mode !== MODE.RESONANCE) return;
+
+        playCurrent();
+    }, 
+        // eslint-disable-next-line
+    [sliderValue, currentQuestion, mode]);
+
+    // モード変更時に選択肢をリセット
+    useEffect(() => {
+        if (mode !== null) {
+            setSelectedIds(["M3", "m3"]);
+            setSelectedInversions(["root"]);
+            setTotal(10);
+        }
+    }, [mode]);
+
+    
 
     function handleAnswer() {
         const error = Math.abs(sliderValue + currentQuestion.targetDetune);
@@ -385,20 +390,19 @@ export default function IntervalTrainer() {
     }
 
     // 次の問題へ
-    function goToNextQuestion() {
-        if (index + 1 < questions.length) {
-            setIndex((i) => i + 1);
-            resetAnswerState();
-        } else {
-            setStage(STAGE.REVIEW_INTRO);
-        }
-    }
+    // function goToNextQuestion() {
+    //     if (index + 1 < questions.length) {
+    //         setIndex((i) => i + 1);
+    //         resetAnswerState();
+    //     } else {
+    //         setStage(STAGE.REVIEW_INTRO);
+    //     }
+    // }
 
     // handleNext本体
-    function handleNext() {
+    const handleNext = useCallback(() => {
         if (stage === STAGE.QUIZ) {
             const q = questions[index];
-            // const key = q.intervalId ?? q.chordId;
 
             updateStats(q, hadWrong);
 
@@ -406,7 +410,15 @@ export default function IntervalTrainer() {
                 setWrongIndices((w) => [...w, index]);
             }
 
-            goToNextQuestion();
+            // goToNextQuestion();
+            // 👇 ここに直接書く
+            if (index + 1 < questions.length) {
+                setIndex((i) => i + 1);
+                resetAnswerState();
+            } else {
+                setStage(STAGE.REVIEW_INTRO);
+            }
+
             return;
         }
 
@@ -439,7 +451,15 @@ export default function IntervalTrainer() {
             setStage(STAGE.SETUP);
             resetState();
         }
-    }
+    }, [
+        stage,
+        questions,
+        index,
+        hadWrong,
+        wrongIndices,
+        reviewIndex,
+        reviewQueue.length,
+    ]);
 
     useEffect(() => {
         function onKey(e) {
